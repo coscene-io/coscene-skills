@@ -3,7 +3,8 @@ name: coscene-docs
 description: >
   Use when answering questions about the coScene platform — what Organization/Project/
   Record/Moment mean, how automation and actions work, how the data model connects,
-  or when debugging coScene issues. Grounds answers in the official documentation corpus.
+  or when debugging coScene issues. Grounds answers in the official documentation
+  corpus — paired with the cos skill for CLI execution.
 ---
 
 # coScene Docs
@@ -19,6 +20,32 @@ Read these on-demand — not on every invocation.
 | `./platform-architecture.md` | Deep dive on data model, device system, storage, API surface |
 | `./automation-guide.md` | Setting up automation — triggers, action runtime, env vars, record.patch.json |
 | `./troubleshooting.md` | Diagnosing failures: auth, upload, action execution, device connectivity |
+
+## Sister Skill
+
+**cos** — CLI execution for the coScene platform via cocli.
+
+Load `cos` when the user wants to execute operations — uploading data, querying
+records, running actions, managing profiles. This skill (`coscene-docs`) handles
+understanding; `cos` handles doing.
+
+- "How do I upload files to a record?" → load `cos`
+- "Run this action on my record" → load `cos`
+- "Set up my cocli profile" → load `cos` (reads `setup.md` for bootstrap)
+
+## Agent Preferences
+
+On first interaction, check for user preferences:
+
+```bash
+cat ~/.coscene/agent-prefs.md 2>/dev/null
+```
+
+If the file exists, adapt:
+- **Language**: respond in the user's preferred language (zh/en). If `auto-detect`, infer from user's message language.
+- **Communication style**: `concise` = terse, direct answers. `explainer` = add context, cite doc sections. `beginner` = walk through concepts step-by-step with examples.
+
+If the file is missing, use defaults (English, concise) and continue without prompting. Do not block on missing preferences.
 
 ## Concept Glossary
 

@@ -4,7 +4,8 @@ description: >
   Use when interacting with the coScene robotics data platform via the cocli CLI —
   uploading records, querying data, managing projects, running actions, or checking
   auth/profile status. Covers 40 CLI commands across records, projects, actions,
-  and administration.
+  and administration — paired with the coscene-docs skill for concept questions
+  and troubleshooting.
 ---
 
 # cos
@@ -17,32 +18,63 @@ Read on-demand — not on every invocation.
 
 | File | Read when... |
 |---|---|
+| `./setup.md` | Preflight reports non-OK status, or user needs install/profile/prefs setup |
 | `./records.md` | Working with record lifecycle, file operations, or moments |
 | `./workflows.md` | Building multi-step workflows or following templates |
 | `./actions.md` | Running actions, monitoring runs, or understanding automation runtime |
 
+## Sister Skill
+
+**coscene-docs** — platform concepts, automation model, and troubleshooting.
+
+Load `coscene-docs` when the user asks about what things mean, how the platform
+works conceptually, or needs troubleshooting guidance. This skill (`cos`) handles
+CLI execution; `coscene-docs` handles understanding.
+
+- "What does Organization / Project / Record mean?" → load `coscene-docs`
+- "How does the automation system work?" → load `coscene-docs`
+- "Why is my upload failing?" → check Error Recovery below first, then load `coscene-docs` for deeper diagnosis
+
 ## Preflight
 
-Run before any cocli work. All commands below assume an active profile.
+Run once before any cocli work. Single invocation, read stdout for status:
 
 ```bash
-# 1. Check active profile
-cocli login current
-
-# 2. List available profiles (switch if needed)
-cocli login list -v
-
-# 3. Verify project access
-cocli project list -o json
+bash -c '
+  command -v cocli >/dev/null 2>&1 || { echo "TOOL_MISSING"; exit 0; }
+  V=$(cocli --version 2>&1 | head -1)
+  cocli login current >/dev/null 2>&1 || { echo "PROFILE_MISSING $V"; exit 0; }
+  cocli project list -o json >/dev/null 2>&1 || { echo "ACCESS_DENIED $V"; exit 0; }
+  echo "OK $V"
+'
 ```
 
-If no profile exists:
+**Route by status code:**
 
-```bash
-cocli login add -n <name> -t <bearer-token> -p <project-slug> -e <endpoint>
-```
+| Status | Action |
+|---|---|
+| `TOOL_MISSING` | Read `./setup.md` § Install |
+| `PROFILE_MISSING` | Read `./setup.md` § Profile Bootstrap |
+| `ACCESS_DENIED` | Token expired or invalid. Check Error Recovery table below. If unresolvable, read `./setup.md` § Profile Bootstrap to re-add. |
+| `OK` | Proceed. Version string included for reference. |
+
+If version in the OK output looks outdated or is a dev build (`v0.0.0+...`), suggest `cocli update` or read `./setup.md` § Update.
 
 Security note: `~/.cocli.yaml` stores bearer tokens in plaintext. Ensure `chmod 0600 ~/.cocli.yaml`.
+
+## Agent Preferences
+
+On first interaction, check for user preferences:
+
+```bash
+cat ~/.coscene/agent-prefs.md 2>/dev/null
+```
+
+If the file exists, adapt:
+- **Language**: respond in the user's preferred language (zh/en). If `auto-detect`, infer from user's message language.
+- **Communication style**: `concise` = terse, code-heavy. `explainer` = add context and rationale. `beginner` = step-by-step with platform concept explanations.
+
+If the file is missing, use defaults (English, concise) and continue without prompting. Do not block on missing preferences.
 
 ### Non-Interactive Flags
 
