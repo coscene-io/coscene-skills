@@ -8,7 +8,9 @@ Complete flag reference and patterns for record lifecycle, file operations, mome
 
 Create a new record in the active project.
 
-**Flags:** `-p` (project), `-t` (title, required), `-d` (description), `-l` (labels `key=val`, repeatable), `--custom` (custom field JSON), `-i` (thumbnail), `-P` (parallel upload threads), `-s` (part-size), `--no-tty`, `--tty`, `-o json`
+**Flags:** `-p` (project), `-t` (title, default: "cocli created record"), `-d` (description), `-l` (labels `key=val`, repeatable), `--custom` (custom field JSON), `-i` (thumbnail), `-P` (parallel upload threads), `-s` (part-size), `--no-tty`, `--tty`, `-o json`
+
+Pass `-t` explicitly for meaningful titles — agents should always provide one.
 
 ```bash
 # Minimal — capture name from JSON
@@ -56,7 +58,7 @@ cocli record update records/abc-123 --update-labels "env=prod" # replace
 cocli record update records/abc-123 --delete-labels "env"      # delete
 ```
 
-**Note:** `-l` (append), `--update-labels` (replace), and `--delete-labels` (remove) are mutually exclusive — use only one per invocation.
+**Mutually exclusive:** pick exactly one of `-l/--labels`, `--update-labels`, or `--delete-labels` per invocation.
 
 ### record list — JSON: Yes
 
@@ -243,7 +245,7 @@ Convenient but slow on large datasets.
 
 ### Integer-based (deprecated for records)
 
-`--page` still works for `project list` and `project file list`. Prefer `--page-token` for records.
+`--page` still works for `project list`, `project file list`, and `record file list` (integer `--page` only, no `--page-token`). Prefer `--page-token` for records.
 
 ---
 

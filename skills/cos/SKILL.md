@@ -5,6 +5,9 @@ description: >
   uploading records, querying data, managing projects, running actions, or checking
   auth/profile status. Covers 40 CLI commands across records, projects, actions,
   and administration.
+derived-from: "[[coscene-skills-compilation]]"
+deploy-target: cp-repos://coscene-skills/skills/cos
+tags: [domain/coscene, type/skill]
 ---
 
 # cos
@@ -76,7 +79,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | List records | `cocli record list -o json` | Yes |
 | List all records (no pagination) | `cocli record list --all -o json` | Yes |
 | Search records by keyword | `cocli record list --keywords "lidar" -o json` | Yes |
-| Search records by JSON Logic (`-s` mutex with `--labels`, `--keywords`, `--include-archive`) | `cocli record list -s '<json-logic>' -o json` | Yes |
+| Search records by JSON Logic (`-s` mutex with each of `--labels`, `--keywords`, `--include-archive` — three separate constraints) | `cocli record list -s '<json-logic>' -o json` | Yes |
 | Filter by labels | `cocli record list --labels "env=prod" -o json` | Yes |
 | Include archived records | `cocli record list --include-archive -o json` | Yes |
 | Describe single record | `cocli record describe <record> -o json` | Yes |

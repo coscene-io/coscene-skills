@@ -4,6 +4,9 @@ description: >
   Use when answering questions about the coScene platform — what Organization/Project/
   Record/Moment mean, how automation and actions work, how the data model connects,
   or when debugging coScene issues. Grounds answers in the official documentation corpus.
+derived-from: "[[coscene-skills-compilation]]"
+deploy-target: cp-repos://coscene-skills/skills/coscene-docs
+tags: [domain/coscene, type/skill]
 ---
 
 # coScene Docs

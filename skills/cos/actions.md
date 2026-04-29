@@ -107,7 +107,7 @@ cocli action run actions/my-action records/abc-123 \
   -P model=yolo \
   -P threshold=0.5 \
   -P output_format=json \
-  -f --skip-params
+  -f
 ```
 
 ### Skipping All Parameters
