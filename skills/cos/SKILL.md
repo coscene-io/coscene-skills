@@ -68,14 +68,17 @@ Security note: `~/.cocli.yaml` stores bearer tokens in plaintext. Ensure `chmod 
 On first interaction, check for user preferences:
 
 ```bash
-cat ~/.coscene/agent-prefs.md 2>/dev/null
+cat ~/.coscene/AGENTS.md 2>/dev/null
 ```
 
 If the file exists, adapt:
 - **Language**: respond in the user's preferred language (zh/en). If `auto-detect`, infer from user's message language.
 - **Communication style**: `concise` = terse, code-heavy. `explainer` = add context and rationale. `beginner` = step-by-step with platform concept explanations.
+- **Memory / Gotchas**: check for relevant notes before answering — past corrections, environment quirks, known workarounds.
 
 If the file is missing, use defaults (English, concise) and continue without prompting. Do not block on missing preferences.
+
+When the user corrects your behavior, states a new preference, or you discover an environment quirk — append a bullet to `## Memory` or `## Gotchas` in `~/.coscene/AGENTS.md` and update `## Last updated`. Read the file first, append only, do not rewrite existing entries.
 
 ### Non-Interactive Flags
 

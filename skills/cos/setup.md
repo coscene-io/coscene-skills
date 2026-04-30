@@ -114,18 +114,18 @@ chmod 0600 ~/.cocli.yaml
 
 ## Preferences
 
-Agent communication preferences — optional but recommended. Stored at `~/.coscene/agent-prefs.md`.
+Agent preferences and persistent memory. Stored at `~/.coscene/AGENTS.md` — agents both read and write this file.
 
 **AskUserQuestion:** "Preferred language? (zh / en / auto-detect) — recommend auto-detect"
 
 **AskUserQuestion:** "Communication style? (concise / explainer / beginner) — recommend concise for developers, explainer for new users"
 
-Write preferences:
+Write initial preferences:
 
 ```bash
 mkdir -p ~/.coscene
-cat > ~/.coscene/agent-prefs.md << 'PREFS'
-# coScene agent preferences
+cat > ~/.coscene/AGENTS.md << 'AGENTSMD'
+# coScene AGENTS.md
 
 ## Language
 <user-choice>
@@ -133,24 +133,42 @@ cat > ~/.coscene/agent-prefs.md << 'PREFS'
 ## Communication style
 <user-choice>
 
+## Memory
+<!-- Agent-maintained notes: environment details, user patterns, workflow preferences -->
+
+## Gotchas
+<!-- Lessons learned: environment quirks, user corrections, platform edge cases -->
+
 ## Last updated
 <YYYY-MM-DD>
-PREFS
+AGENTSMD
 ```
 
 Replace `<user-choice>` placeholders with the user's answers and `<YYYY-MM-DD>` with the current date.
 
 If `mkdir` or write fails (permissions, disk full), warn the user and continue — preferences are optional. The CLI works without them.
 
-### Prefs file format
+### AGENTS.md format
 
-Both the `cos` and `coscene-docs` skills read this file at first interaction via `cat ~/.coscene/agent-prefs.md 2>/dev/null`. The sections are parsed by heading:
+Both the `cos` and `coscene-docs` skills read this file at first interaction via `cat ~/.coscene/AGENTS.md 2>/dev/null`. The sections are parsed by heading:
 
 | Section | Values | Default (if missing) |
 |---|---|---|
 | `## Language` | `zh`, `en`, `auto-detect` | `en` |
 | `## Communication style` | `concise`, `explainer`, `beginner` | `concise` |
+| `## Memory` | Free-form notes (agent-maintained) | empty |
+| `## Gotchas` | Free-form notes (agent-maintained) | empty |
 | `## Last updated` | ISO 8601 date | — |
+
+### When to update AGENTS.md
+
+Agents should append to `## Memory` or `## Gotchas` when:
+
+- User corrects agent behavior or states a preference not captured in the file
+- Agent discovers an environment detail that affects future interactions (OS, shell, cocli version quirks)
+- A workaround is found for a platform edge case the user will likely hit again
+
+**Update procedure:** read the file, append a bullet under the relevant section, update `## Last updated`. Do not rewrite existing entries — append only. Keep each entry to one line.
 
 ## Help
 
