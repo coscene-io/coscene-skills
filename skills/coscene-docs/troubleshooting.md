@@ -78,8 +78,10 @@ Diagnostic tree format: symptom, then check, then resolution.
 
 **Symptom:** Immediate failure with no execution logs.
 **Check:** Image URL may be wrong, image may not exist, or registry inaccessible.
-**Fix:** Verify image URL and tag. For org registry: ensure image is uploaded. For
-Docker Hub: ensure image is public. Check architecture matches (amd64).
+**Fix:** Prefer a fully qualified org-registry image. Use
+`cocli registry create-credential -o json` or `cocli registry login` to verify
+the registry for the active profile, ensure the image is uploaded, and check the
+image architecture matches the action runtime, normally `linux/amd64`.
 
 ### Multi-line command format error
 

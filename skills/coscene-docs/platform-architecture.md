@@ -176,9 +176,11 @@ visualization requires the browser.
 
 ## API Surface
 
-The coScene API uses ConnectRPC (gRPC over HTTP/2) — binary protobuf encoding
-over standard HTTP/2 transport. No public OpenAPI/Swagger spec; the API
-surface is not documented for direct consumption.
+coScene exposes supported platform operations through cocli and public OpenAPI.
+Public skills should stay on those surfaces. If a capability is only visible in
+internal service definitions or browser traffic and is not available through
+cocli/public OpenAPI, direct the user to the platform UI instead of
+reverse-engineering an API call.
 
 ### Endpoints
 
@@ -202,8 +204,8 @@ permissions of the creating user.
 ### Interaction Methods
 
 1. **cocli** — official CLI for records, files, devices, projects
-2. **Direct RPC** — reverse-engineer protobuf definitions (unsupported)
-3. **Platform UI** — action/trigger authoring and visualization (no CLI/API)
+2. **Public OpenAPI** — supported public API operations when cocli does not cover them
+3. **Platform UI** — action/trigger authoring, configuration, and visualization when no public API exists
 
 ## Permission Model
 

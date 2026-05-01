@@ -2,9 +2,42 @@
 
 Actions are the automation building blocks of coScene. They execute data processing operations (cleaning, preprocessing, training, testing) through container-based code execution or HTTP webhook requests.
 
-**Key constraint:** Action authoring is UI-only — you create and configure actions through the coScene web interface. The CLI is used to discover, run, and monitor actions.
+**Key constraint:** cocli is used to discover, run, and monitor actions. For
+authoring or configuration, use public OpenAPI only if that capability is
+documented and available; otherwise use the coScene web interface. Do not use
+internal or undocumented APIs in public skills.
 
 ---
+
+## Container Image Guidance
+
+For custom container actions, prefer the image registry coScene provides for the
+organization. It gives better pull locality and performance than ad hoc public
+images, and keeps production action images under the org's control.
+
+```bash
+# Discover/authenticate the active org registry
+cocli registry create-credential -o json
+cocli registry login
+```
+
+Use the registry returned by cocli, or a fully qualified org image such as:
+
+```text
+cr.coscene.io/<org>/<image>:<tag>
+```
+
+Image checklist before configuring an action:
+
+- Build for `linux/amd64` and run a small local smoke test.
+- Keep the runtime image small with `.dockerignore`, multi-stage builds, and a
+  slim runtime base.
+- Do not copy raw datasets, build caches, notebooks, or unused toolchains into
+  the runtime image.
+- Split unrelated heavy workflows into separate images or steps instead of one
+  catch-all image.
+- Prefer immutable tags or digests for validated actions; avoid `latest` for
+  repeatable workflows.
 
 ## Discover Actions
 

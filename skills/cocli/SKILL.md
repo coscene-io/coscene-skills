@@ -1,14 +1,14 @@
 ---
-name: cos
+name: cocli
 description: >
   Use when interacting with the coScene robotics data platform via the cocli CLI —
   uploading records, querying data, managing projects, running actions, or checking
-  auth/profile status. Covers 40 CLI commands across records, projects, actions,
-  and administration — paired with the coscene-docs skill for concept questions
-  and troubleshooting.
+  auth/profile status. Paired with the coscene-docs skill for concept questions
+  and troubleshooting. Use public OpenAPI only when cocli cannot cover a supported
+  public operation; otherwise direct the user to the coScene web UI.
 ---
 
-# cos
+# cocli
 
 > CLI-first interface to the coScene robotics data platform. Upload, query, process, move.
 
@@ -28,7 +28,7 @@ Read on-demand — not on every invocation.
 **coscene-docs** — platform concepts, automation model, and troubleshooting.
 
 Load `coscene-docs` when the user asks about what things mean, how the platform
-works conceptually, or needs troubleshooting guidance. This skill (`cos`) handles
+works conceptually, or needs troubleshooting guidance. This skill (`cocli`) handles
 CLI execution; `coscene-docs` handles understanding.
 
 - "What does Organization / Project / Record / Moment (一刻) mean?" → load `coscene-docs`
@@ -44,7 +44,11 @@ bash -c '
   command -v cocli >/dev/null 2>&1 || { echo "TOOL_MISSING"; exit 0; }
   V=$(cocli --version 2>&1 | head -1)
   cocli login current >/dev/null 2>&1 || { echo "PROFILE_MISSING $V"; exit 0; }
-  timeout 10s cocli project list -o json >/dev/null 2>&1 || { echo "ACCESS_DENIED $V"; exit 0; }
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 10s cocli project list -o json >/dev/null 2>&1 || { echo "ACCESS_DENIED $V"; exit 0; }
+  else
+    cocli project list -o json >/dev/null 2>&1 || { echo "ACCESS_DENIED $V"; exit 0; }
+  fi
   echo "OK $V"
 '
 ```
@@ -90,6 +94,15 @@ cocli has several commands that prompt for interactive input. In agent/automatio
 | `-y` / `--yes` | `project create` | Skip creation confirmation |
 | `--skip-params` | `action run` (without `-P`) | Skip param prompts, use defaults. Mutex with `-P`. |
 | `--no-tty` | `upload` commands | Disable TTY progress bars |
+
+### Destructive or Bulk Operations
+
+For delete, move, overwrite, and bulk metadata updates:
+
+1. Read back and show the exact target list first.
+2. Explain what will change and whether it is reversible.
+3. Ask for explicit user confirmation before running the mutating command.
+4. Use `-f` only after confirmation, then verify with a readback.
 
 ## Command Lookup Table
 
@@ -155,6 +168,20 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
+
+### Registry and Action Images
+
+| Task | Command | JSON? |
+|---|---|---|
+| Log in to the active organization's registry | `cocli registry login` | No |
+| Generate Docker registry credentials | `cocli registry create-credential -o json` | Yes |
+
+For container actions, prefer the organization registry that coScene provides for
+each org. Use `cocli registry create-credential -o json` or `cocli registry login`
+to discover and authenticate against the exact registry for the active profile;
+do not guess registry hosts from memory. Use fully qualified image references
+such as `cr.coscene.io/<org>/<image>:<tag>` or the registry host returned by
+cocli.
 
 ### Cross-Project
 
@@ -230,9 +257,12 @@ Go to Preflight section above.
 
 ## Output Parsing
 
-### Commands with `-o json` (14 commands)
+### Commands with `-o json`
 
-Parse JSON directly. Full list: `action list`, `action list-run`, `project list`, `project create`, `project file list`, `record list`, `record create`, `record describe`, `record file list`, `record moment list`, `user list`, `user get`, `role list`, `registry create-credential`.
+Parse JSON directly. Common examples: `action list`, `action list-run`,
+`project list`, `project create`, `project file list`, `record list`,
+`record create`, `record describe`, `record file list`, `record moment list`,
+`user list`, `user get`, `role list`, `registry create-credential`.
 
 Common JSON shapes:
 
@@ -253,7 +283,7 @@ Key fields to extract:
 - `labels` — key-value metadata map
 - `state` — action run status (`RUNNING`, `SUCCEEDED`, `FAILED`)
 
-### Commands without `-o json` (27 commands)
+### Commands without `-o json`
 
 Check exit code + capture stderr. stdout is human text — do not parse structurally.
 
@@ -274,7 +304,7 @@ These are hard rules. Do not reason around them.
 
 | Thought | Response |
 |---|---|
-| "I'll call the coScene API directly" | NEVER. cocli handles auth, pagination, retry, endpoint routing. |
+| "I'll use an internal or undocumented API" | NEVER in public skills. Use `cocli` first, then public OpenAPI only for supported public operations. If neither exposes the capability, direct the user to the coScene web UI. |
 | "The default profile is probably right" | ALWAYS run `cocli login current` first. Profiles carry org + project context. |
 | "I don't need `-o json`" | ALWAYS use `-o json` when available. Human table output is not parseable. |
 | "I can skip `-f` on action run" | NEVER. Without `-f`, cocli prompts interactively and hangs. |
@@ -285,6 +315,7 @@ These are hard rules. Do not reason around them.
 | "Action run returned 0, so the action completed" | action run is ASYNC. Exit 0 means submitted, not completed. Poll `action list-run`. |
 | "I'll upload without `--no-tty`" | In non-interactive contexts, always pass `--no-tty` to prevent TTY prompts. |
 | "I'll use `login switch` to change profile" | NEVER in automation. `login switch` uses an interactive TUI menu — hangs without TTY. Use `cocli login set -n <name>` instead. |
+| "I'll guess the registry host" | NEVER. Use `cocli registry create-credential -o json` or `cocli registry login` to discover/authenticate the active org registry. |
 
 ## Cross-Skill Referral
 

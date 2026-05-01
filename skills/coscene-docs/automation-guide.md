@@ -5,8 +5,8 @@
 The coScene automation system connects events to actions through triggers.
 The execution model is: an event occurs → a trigger matches → an action
 executes → outputs are processed. All action authoring and trigger
-configuration happens in the platform UI — there is no CLI or API for
-creating or editing action definitions or trigger conditions.
+configuration should use public product surfaces: cocli, public OpenAPI, or the
+platform UI when the capability is not exposed by cocli/public OpenAPI.
 
 ```
 Event (file upload, collection complete, record change, cron, task change)
@@ -37,8 +37,11 @@ invocation time. Parameters are project-scoped and reusable.
 
 ### Authoring Constraint
 
-Actions are authored exclusively in the platform web UI — no cocli command or
-API. System-provided built-in actions (e.g., "Decompress File") are available
+Actions are authored through public product surfaces only. Prefer `cocli` for
+execution and inspection, use public OpenAPI only for supported public
+operations, and use the platform web UI when neither exposes the authoring or
+configuration capability. Do not use internal or undocumented APIs in public
+skills. System-provided built-in actions (e.g., "Decompress File") are available
 without authoring.
 
 ## Container Code Execution (镜像代码执行)
@@ -47,9 +50,24 @@ without authoring.
 
 | Source | Example | Notes |
 |---|---|---|
-| Organization registry | `registry.example.com/org/image:tag` | Private images uploaded to org registry |
-| Docker Hub | `python:3.11-slim` | Public images |
-| Official coScene images | `registry-vpc.cn-hangzhou.aliyuncs.com/coscene/cos:2025-02-06-v25.6.1` | Internal images with `icos` tool pre-installed |
+| Organization registry | `cr.coscene.io/<org>/<image>:<tag>` or registry returned by `cocli` | Preferred for custom action images; each org has a coScene-provided registry with better pull locality and performance |
+| Docker Hub | `docker.io/library/python:3.11-slim` | Public images; useful for quick tests, but org registry is preferred for repeatable action runs |
+| Official coScene images | Image shown in public docs or the web UI | Use only when the image is exposed through public product surfaces; do not assume access to private registries |
+
+Use `cocli registry create-credential -o json` or `cocli registry login` to
+discover and authenticate the exact registry for the active profile. Do not
+guess the registry host; IO and CN environments may differ.
+
+### Action Image Hygiene
+
+- Use fully qualified image references: `<registry>/<org>/<image>:<tag>`.
+- Build and smoke-test for `linux/amd64`, then inspect the pushed manifest.
+- Keep images small: use `.dockerignore`, multi-stage builds, slim runtime bases,
+  and avoid copying raw datasets, build caches, notebooks, or unused toolchains.
+- Split unrelated heavy workflows into separate images or steps instead of one
+  catch-all image. Keep common base layers stable so repeated pulls are fast.
+- Prefer immutable version tags or digests for production actions; avoid mutable
+  `latest` when validating or sharing a workflow.
 
 ### Command Format
 
@@ -172,8 +190,8 @@ operations require initiator access to target project — otherwise 403.
 
 ## Trigger Types
 
-Five trigger types connect events to actions. All trigger configuration is
-UI-only — no API for creating or modifying triggers.
+Five trigger types connect events to actions. Use the platform UI for trigger
+configuration when the operation is not exposed by cocli or public OpenAPI.
 
 ### 1. File Upload (文件上传)
 
@@ -328,6 +346,9 @@ Action A → writes record.patch.json (label: "stage-1") → platform creates re
 - **Output structure:** always follow the `records/*/` convention in
   `$COS_OUTPUT_VOLUME` with `.cos/record.patch.json` — the platform ignores
   output files that do not follow this structure for record operations
+- **Image registry:** for custom container actions, prefer the org registry
+  returned by `cocli` over ad hoc public images; verify the full image reference
+  and architecture before configuring the action
 - **Resource sizing:** start with 2C/4G and scale up only if action execution
   hits OOM or timeout; over-provisioning wastes quota
 - **Idempotency:** design actions to be re-runnable — use record `id` for

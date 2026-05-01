@@ -96,6 +96,8 @@ cocli record file list -p target-project records/abc-123 -R -o json | jq 'length
 
 **Alternative — move (destructive):**
 
+Stop and ask the user for explicit confirmation before running this command.
+
 ```bash
 cocli record move records/abc-123 -P target-project -f
 # Source record is REMOVED after move.
@@ -165,6 +167,9 @@ done
 
 # Step 5: Check outputs (action may have created new files or records)
 cocli record file list "$RECORD" -R -o json | jq '.'
+
+# Optional: download only representative outputs instead of the whole record
+cocli record file download "$RECORD" ./outputs --files "output.mcap,report.json"
 ```
 
 **What can go wrong:**
@@ -295,7 +300,7 @@ for RECORD in $STALE; do
   cocli record describe "$RECORD" -o json | jq '{name, title, labels, updateTime}'
 done
 
-# Step 3: Delete (irreversible)
+# Step 3: Ask the user to confirm the exact list above, then delete (irreversible)
 for RECORD in $STALE; do
   cocli record delete "$RECORD" -f
   echo "Deleted: $RECORD"
@@ -316,6 +321,7 @@ cocli record list --labels "status=stale" --all -o json | jq 'length'
 ## 10. Registry Setup
 
 Log in to the organization's container registry and generate Docker credentials.
+Use this before building or pushing custom container images for actions.
 
 ```bash
 # Step 1: Log in to registry (uses active cocli profile)
@@ -333,11 +339,20 @@ PASSWORD=$(echo "$CRED" | jq -r '.password')
 
 echo "$PASSWORD" | docker login "$REGISTRY" -u "$USERNAME" --password-stdin
 
-# Step 4: Verify
-docker pull "$REGISTRY/my-org/my-image:latest"
+# Step 4: Build and push an action image
+IMAGE="$REGISTRY/<org>/<image>:<tag>"
+docker build --platform linux/amd64 -t "$IMAGE" .
+docker run --rm --platform linux/amd64 "$IMAGE" <smoke-test-command>
+docker push "$IMAGE"
+
+# Step 5: Verify
+docker manifest inspect "$IMAGE" >/dev/null
 ```
 
 **What can go wrong:**
 - Step 1: "token" error → profile token expired. Re-authenticate with `cocli login add`.
 - Step 2: Credential output is sensitive. Do not log or persist in plaintext.
 - Step 3: Docker must be installed and running on the host.
+- Step 4: If building on Apple Silicon or another non-amd64 host, keep
+  `--platform linux/amd64` unless the action runtime explicitly supports another
+  architecture.

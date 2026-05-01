@@ -150,7 +150,7 @@ If `mkdir` or write fails (permissions, disk full), warn the user and continue â
 
 ### AGENTS.md format
 
-Both the `cos` and `coscene-docs` skills read this file at first interaction via `cat ~/.coscene/AGENTS.md 2>/dev/null`. The sections are parsed by heading:
+Both the `cocli` and `coscene-docs` skills read this file at first interaction via `cat ~/.coscene/AGENTS.md 2>/dev/null`. The sections are parsed by heading:
 
 | Section | Values | Default (if missing) |
 |---|---|---|

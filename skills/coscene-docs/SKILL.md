@@ -4,7 +4,7 @@ description: >
   Use when answering questions about the coScene platform — what Organization/Project/
   Record/Moment mean, how automation and actions work, how the data model connects,
   or when debugging coScene issues. Grounds answers in the official documentation
-  corpus — paired with the cos skill for CLI execution.
+  corpus — paired with the cocli skill for CLI execution.
 ---
 
 # coScene Docs
@@ -23,15 +23,15 @@ Read these on-demand — not on every invocation.
 
 ## Sister Skill
 
-**cos** — CLI execution for the coScene platform via cocli.
+**cocli** — CLI execution for the coScene platform via cocli.
 
-Load `cos` when the user wants to execute operations — uploading data, querying
+Load `cocli` when the user wants to execute operations — uploading data, querying
 records, running actions, managing profiles. This skill (`coscene-docs`) handles
-understanding; `cos` handles doing.
+understanding; `cocli` handles doing.
 
-- "How do I upload files to a record?" → load `cos`
-- "Run this action on my record" → load `cos`
-- "Set up my cocli profile" → load `cos` (reads `setup.md` for bootstrap)
+- "How do I upload files to a record?" → load `cocli`
+- "Run this action on my record" → load `cocli`
+- "Set up my cocli profile" → load `cocli` (reads `setup.md` for bootstrap)
 
 ## Agent Preferences
 
@@ -95,10 +95,9 @@ A building block of the automation system representing a specific processing tas
 Actions execute through two mechanisms: container-based code execution (Docker images
 with record files mounted) or HTTP webhook requests. Each action has one or more
 steps, supports `{{parameter.key}}` interpolation for configuration, and runs with
-configurable resources (1-8 CPU cores, 2-16GB memory). Actions are authored
-exclusively in the platform UI — there is no CLI or API for creating or editing
-action definitions. System-provided built-in actions (e.g., "Decompress File") are
-also available.
+configurable resources (1-8 CPU cores, 2-16GB memory). Use the platform UI for
+action authoring when the operation is not exposed by cocli or public OpenAPI.
+System-provided built-in actions (e.g., "Decompress File") are also available.
 
 ### Device / coScout (设备 / 端助理)
 
@@ -140,8 +139,9 @@ event types: file upload (glob pattern + uploader role + record label match), de
 collection status change (manual/rule completion), record change (label or custom
 field mutation), generic task status change, and cron schedule (standard 5-field
 syntax, UTC). Triggers reference project-scoped actions, can be enabled/disabled
-via the UI, and support system-provided built-in actions. Trigger configuration is
-UI-only — no API for creating or modifying triggers.
+via the UI, and support system-provided built-in actions. Use the platform UI for
+trigger configuration when the operation is not exposed by cocli or public
+OpenAPI.
 
 ### Invocation (调用)
 
@@ -165,7 +165,7 @@ status, stdout/stderr, and results.
 | "How does record.patch.json work?" / chaining actions | `./automation-guide.md` |
 | "Why is X broken?" / upload failed / action didn't run | `./troubleshooting.md` |
 | "Device offline / rules not pushed / collection stuck" | `./troubleshooting.md` |
-| "How do I use cocli?" / CLI commands / API calls | Load the `cos` skill — this skill covers concepts, not CLI |
+| "How do I use cocli?" / CLI commands / API calls | Load the `cocli` skill — this skill covers concepts, not CLI |
 
 ## Automation Capability Map
 
@@ -175,6 +175,9 @@ status, stdout/stderr, and results.
   change (label/field mutation), task status change, cron schedule
 - **Run containers:** custom org registry images, public Docker Hub images, or
   official coScene images — with record files mounted at `/cos/files`
+- **Use org registry:** every organization has a coScene-provided image registry;
+  prefer it for custom action images and discover the exact host with `cocli`
+  instead of guessing
 - **HTTP webhooks:** send requests with built-in variable interpolation
   (`{{task.title}}`, `{{record.link}}`, `{{device.id}}`, etc.)
 - **Chain actions:** write `record.patch.json` in `/cos/outputs/records/*/` to
@@ -188,11 +191,13 @@ status, stdout/stderr, and results.
 
 ### What the platform CANNOT do
 
-- **Action authoring via CLI/API** — actions are defined and edited in the UI only
-- **Programmatic access to action source** — step definitions, images, and commands
-  are not exposed via API
-- **Trigger configuration via API** — trigger conditions are set and modified in
-  the UI only
+- **Action authoring outside public surfaces** — if `cocli` and public OpenAPI do
+  not expose the operation, use the coScene web UI; do not use internal or
+  undocumented APIs in public skills
+- **Undocumented action-source access** — do not rely on hidden fields or internal
+  APIs for step definitions, images, and commands; use public product surfaces
+- **Undocumented trigger configuration** — if trigger configuration is not exposed
+  by cocli or public OpenAPI, use the UI
 - **Retroactive trigger on label change** — label changes on existing records do not
   fire file-upload triggers; must add file or mutate custom field
 - **Local execution** — all action execution is containerized cloud; nothing runs on
@@ -255,14 +260,15 @@ lag behind or simplify.
 |---|---|
 | "I can answer this from training data" | NEVER for platform-specific facts. Always ground in bundled references or glossary. coScene is a living product; training data is stale or wrong. |
 | "The English and Chinese docs say the same thing" | Usually but not always. zh is the primary source; en translations can lag. When precision matters, check both. |
-| "I know how coScene automation works" | CHECK the capability map above. Action authoring and trigger configuration are UI-only — no CLI, no API for definitions. |
+| "I know how coScene automation works" | CHECK the capability map above. Use `cocli` or public OpenAPI only when they expose the operation; otherwise use the web UI. |
 | "Record and file are the same thing" | NO. A record is a container. Files live inside records. One record holds many files from one scenario. |
 | "Moments are comments" | NO. Timestamped annotations anchored to sensor data timelines, with start/end times and structured attributes. |
 | "Actions run on the user's machine" | NO. Containerized cloud environment with mounted record files at `/cos/files` and injected env vars. |
 | "Organization/Project is just folders" | NO. RBAC permission boundaries. Org controls billing, devices, registry. Project controls record access, automation scope, member roles. |
 | "Labels trigger actions when changed" | NOT directly. Label changes on existing records do not fire file-upload triggers. Only field mutations and new file uploads do. |
 | "Rule engine and triggers are the same" | NO. Rule engine = device/edge (CEL, event codes, dedup). Triggers = project/cloud (file upload, cron, status). |
-| "I can create actions with cocli" | NO. cocli handles records, files, devices, projects. Action/trigger authoring is UI-only. |
+| "I can use hidden APIs when cocli cannot do it" | NO. Public skills must stay on public OpenAPI, cocli, and web UI operations only. |
+| "I can create actions with cocli" | NO. cocli handles records, files, devices, projects. If public OpenAPI does not expose action authoring, use the web UI. |
 
 ## Common Misconceptions
 
@@ -283,5 +289,6 @@ lag behind or simplify.
   (CEL expressions, event codes, dedup windows); triggers are cloud/project-side
   (file upload, cron, status change).
 
-- **cocli cannot author automation** — CLI handles data operations (records, files,
-  devices); action and trigger definitions require the platform UI.
+- **cocli cannot author automation by itself** — CLI handles data operations
+  (records, files, devices). If public OpenAPI also does not expose a needed
+  automation authoring capability, use the platform UI.
