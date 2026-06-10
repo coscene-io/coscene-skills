@@ -2,6 +2,20 @@
 
 Complete flag reference and patterns for record lifecycle, file operations, moments, pagination, filtering, and batch processing.
 
+## Resource Names
+
+Record names returned by `cocli record list`, `record create`, and `record describe`
+use the full resource name format:
+
+```
+projects/{project-uuid}/records/{record-uuid}
+```
+
+Always use the full resource name when passing a record to other cocli commands.
+When the full name is used, the `-p` (project) flag is optional — the project is
+already encoded in the path. The `-p` flag is only required when using a bare
+record UUID or a short name without the project prefix.
+
 ## Record Lifecycle
 
 ### record create — JSON: Yes
@@ -21,7 +35,7 @@ cocli record create -t "Lidar Run 7" -d "Highway segment" \
   -l env=prod -l robot=lidar01 -o json
 ```
 
-**Output shape:** `{"name": "records/abc-123", "title": "Drive 42", "labels": {...}, ...}`
+**Output shape:** `{"name": "projects/{project-uuid}/records/{record-uuid}", "title": "Drive 42", "labels": {...}, ...}`
 
 ### record upload — JSON: No
 
@@ -43,7 +57,7 @@ Get full metadata for a single record.
 cocli record describe records/abc-123 -o json
 ```
 
-**Output shape:** `{"name": "records/abc-123", "title": "...", "description": "...", "labels": {...}, "createTime": "...", "updateTime": "..."}`
+**Output shape:** `{"name": "projects/{project-uuid}/records/{record-uuid}", "title": "...", "description": "...", "labels": {...}, "createTime": "...", "updateTime": "..."}`
 
 ### record update — JSON: No
 
@@ -71,7 +85,7 @@ cocli record list -o json
 cocli record list --labels "env=prod" --keywords "lidar" --all -o json
 ```
 
-**Output shape:** `[{"name": "records/abc-123", "title": "...", "labels": {...}, ...}, ...]`
+**Output shape:** `[{"name": "projects/{project-uuid}/records/{record-uuid}", "title": "...", "labels": {...}, ...}, ...]`
 
 ### record download — JSON: No
 
