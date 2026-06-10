@@ -285,17 +285,17 @@ Common JSON shapes:
 
 ```json
 // List commands → array of objects
-[{"name": "records/abc-123", "title": "Drive 42", "labels": {"env": "prod"}, ...}]
+[{"name": "projects/abc-123/records/def-456", "title": "Drive 42", "labels": {"env": "prod"}, ...}]
 
 // Describe/get → single object
-{"name": "records/abc-123", "title": "Drive 42", "labels": {"env": "prod"}, ...}
+{"name": "projects/abc-123/records/def-456", "title": "Drive 42", "labels": {"env": "prod"}, ...}
 
 // Action list-run → array with status field
 [{"name": "actionRuns/xyz", "state": "SUCCEEDED", ...}]
 ```
 
 Key fields to extract:
-- `name` — resource identifier (pass to other commands)
+- `name` — full resource name (`projects/{project-uuid}/records/{record-uuid}`). Use this value as-is when passing to other cocli commands. When the full resource name is used, `-p` is optional (the project is already encoded in the path).
 - `title` — human-readable label
 - `labels` — key-value metadata map
 - `state` — action run status (`RUNNING`, `SUCCEEDED`, `FAILED`)
