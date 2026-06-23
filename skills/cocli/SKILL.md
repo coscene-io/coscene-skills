@@ -185,6 +185,14 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
+| Print a run's logs (running → live pod logs, finished → archived log, same command) | `cocli action logs <action-run> -p <slug>` | No |
+| Follow live logs, wait for the run to start | `cocli action logs <action-run> -p <slug> -f` | No |
+| Logs for a specific job index / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
+
+`<action-run>` is a full resource name (`projects/<project>/actionRuns/<uuid>`) or a bare UUID.
+Here `-f` means **`--follow`** (stream and reconnect on transient errors), **not** `--force`.
+Without `-f`, a not-yet-started run is reported and the command exits; logs is a streaming text
+command (no `-o json`) — exit `0` = success, `1` = error (check stderr).
 
 ### Registry and Action Images
 
@@ -256,6 +264,9 @@ Match user intent to the correct command sequence.
 2. `cocli action run <action> <record> -P key=val -f`
 3. **CRITICAL:** action run is ASYNC. Exit 0 = submitted, not completed.
 4. Poll: `cocli action list-run -r <record> -o json` until status shows completion.
+5. Inspect logs: `cocli action logs <action-run> -p <slug>` — add `-f` to follow a running
+   run live (waits if it hasn't started). Once the run finishes, the archived log is printed
+   automatically, so the same command works mid-run or after completion.
 
 **Cross-project transfer:**
 
@@ -326,6 +337,7 @@ These are hard rules. Do not reason around them.
 | "The URL is `volc.coscene.cn`, but the default endpoint is probably fine" | NEVER. Match the profile endpoint to the platform URL host, for example `volc.coscene.cn` → `https://openapi.volc.coscene.cn`. |
 | "I don't need `-o json`" | ALWAYS use `-o json` when available. Human table output is not parseable. |
 | "I can skip `-f` on action run" | NEVER. Without `-f`, cocli prompts interactively and hangs. |
+| "`-f` always means `--force`" | NOT for `action logs`, where `-f` is `--follow` (stream live). It is `--force` on `action run`, `delete`, `copy`, `move`. |
 | "I'll hardcode the endpoint URL for data commands" | NEVER. The active profile handles endpoint selection. Only set an endpoint when creating/updating a profile, then verify with `cocli login current`. |
 | "I'll use `record view` to see the record" | `record view` only prints a URL (or opens browser with `-w`). Use `record describe -o json`. |
 | "I'll skip `--skip-params` on action run" | Use `--skip-params` for defaults (no `-P`), or `-P key=val` for explicit params. They are mutually exclusive — never combine. |
