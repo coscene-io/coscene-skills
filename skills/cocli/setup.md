@@ -138,6 +138,36 @@ chmod 0600 ~/.cocli.yaml
 
 `~/.cocli.yaml` stores bearer tokens in plaintext. Restrict read access to the owner.
 
+### Per-invocation profile override and CI env
+
+To target a profile for a single command without changing the persisted
+current-profile, use the global `--profile` flag. It overrides in memory only —
+never written to the config file — so concurrent invocations with different
+`--profile` values don't clobber each other.
+
+```bash
+cocli record list --profile staging
+cocli project list --profile prod -o json
+```
+
+Prefer `--profile` over `cocli login set` when you only need a different profile
+for one or a few commands. Use `login set -n <name>` when you want to change the
+default persistently.
+
+Resolution precedence (highest first):
+
+```
+--profile NAME  >  complete COS_* env  >  config current-profile
+```
+
+- `--profile NAME` selects a named profile; hard error if NAME is not in the config.
+- A complete `COS_*` env set (`COS_ENDPOINT` + `COS_TOKEN` + `COS_PROJECT`,
+  optional `COS_PROJECTID`) forms a one-off ephemeral profile that overrides the
+  config current-profile (a partial set is ignored). This is the cleanest way to
+  drive cocli from CI without writing a config file.
+- `--profile` has no effect on `cocli login` subcommands — those always operate
+  on the on-disk config.
+
 ## Preferences
 
 Agent preferences and persistent memory. Stored at `~/.coscene/AGENTS.md` — agents both read and write this file.

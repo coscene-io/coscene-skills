@@ -84,6 +84,19 @@ default release endpoint, while `cocli login current` shows the profile endpoint
 actually used by commands. If no existing profile matches the user's URL, read
 `./setup.md` § Profile Bootstrap and create one with `cocli login add -e`.
 
+### Per-invocation profile override (`--profile`)
+
+To target a profile for a single command without changing the persisted
+current-profile, use the global `--profile` flag (in-memory only, safe for
+concurrent runs against different profiles):
+
+```bash
+cocli record list --profile staging
+```
+
+Precedence (`--profile` > complete `COS_*` env > config current-profile) and CI
+env usage: see `./setup.md` § Profile Bootstrap.
+
 ## Agent Preferences
 
 On first interaction, check for user preferences:
@@ -222,7 +235,8 @@ cocli.
 |---|---|---|
 | Add login profile | `cocli login add -n <name> -t <token> -p <slug> -e <endpoint>` — choose endpoint from the platform URL; history-suppress per setup.md § Profile Bootstrap (zsh: `setopt HIST_IGNORE_SPACE`; bash: `HISTCONTROL=ignorespace`) | No |
 | Switch profile (interactive — TUI, will hang in automation) | `cocli login switch` | No |
-| Switch profile (non-interactive) | `cocli login set -n <name>` | No |
+| Switch profile persistently (non-interactive) | `cocli login set -n <name>` | No |
+| Use a profile for ONE command (no config change) | `cocli <cmd> --profile <name>` — global flag; overrides current-profile in memory only, safe for concurrent runs against different profiles | No |
 | Delete profile | `cocli login delete <name>` | No |
 | Create project | `cocli project create -p <slug> -n "name" -b private -y` | Yes |
 | List users | `cocli user list -o json` | Yes |
@@ -344,7 +358,7 @@ These are hard rules. Do not reason around them.
 | "I'll use `--page` for pagination" | Use `--page-token` or `--all`. `--page` is deprecated for records. |
 | "Action run returned 0, so the action completed" | action run is ASYNC. Exit 0 means submitted, not completed. Poll `action list-run`. |
 | "I'll upload without `--no-tty`" | In non-interactive contexts, always pass `--no-tty` to prevent TTY prompts. |
-| "I'll use `login switch` to change profile" | NEVER in automation. `login switch` uses an interactive TUI menu — hangs without TTY. Use `cocli login set -n <name>` instead. |
+| "I'll use `login switch` to change profile" | NEVER in automation. `login switch` uses an interactive TUI menu — hangs without TTY. Use `cocli login set -n <name>` to switch persistently, or `--profile <name>` on a single command (no config mutation, safe for concurrent runs). |
 | "I'll guess the registry host" | NEVER. Use `cocli registry create-credential -o json` or `cocli registry login` to discover/authenticate the active org registry. |
 
 ## Cross-Skill Referral
