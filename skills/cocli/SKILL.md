@@ -21,7 +21,7 @@ Read on-demand — not on every invocation.
 | `./setup.md` | Preflight reports non-OK status, or user needs install/profile/prefs setup |
 | `./records.md` | Working with record lifecycle, file operations, or moments |
 | `./workflows.md` | Building multi-step workflows or following templates |
-| `./actions.md` | Running actions, monitoring runs, or understanding automation runtime |
+| `./actions.md` | Creating, running, or monitoring actions, or understanding automation runtime |
 
 ## Sister Skill
 
@@ -194,6 +194,8 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 
 | Task | Command | JSON? |
 |---|---|---|
+| Create action (inline single container; job auto-named `main`) | `cocli action create -p <slug> --name <n> --image <img> --command "python run.py" --quota large -o json` | Yes |
+| Create action from spec file / stdin | `cocli action create -p <slug> -f action.yaml` (`-f -` for stdin) | Yes |
 | List available actions | `cocli action list -o json` | Yes |
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
 | List action runs | `cocli action list-run -o json` | Yes |

@@ -41,6 +41,93 @@ Image checklist before configuring an action:
 
 ---
 
+## Create an Action
+
+`cocli action create` registers a new action in a project. Two authoring modes:
+
+- **Inline flags** — minimal single-container action straight from the command
+  line (`--name`, `--image`, `--command`, ...). Good for quick agent-spawned
+  actions.
+- **Spec file** (`-f`) — a full YAML/JSON `ActionSpec` for multi-job, HTTP,
+  parameterized, or storage/mount/quota-configured actions. Use `--example` to
+  get a skeleton, edit it, then `-f` it back in.
+
+Flags override file fields when both are set.
+
+### Flag Reference
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug (falls back to the profile default) |
+| `-f` | `--file` | Action spec YAML/JSON file (`-` for stdin) |
+| | `--name` | Action name (inline mode) |
+| | `--description` | Action description (inline mode) |
+| | `--image` | Container image (inline mode) |
+| | `--command` | Container command line — shell-split, quote-aware (inline mode; see below) |
+| | `--env` | Container env `key=value` (repeatable; inline mode) |
+| `-P` | `--param` | Action parameter default `key=value` (repeatable) |
+| | `--quota` | Resource profile: `small` \| `medium` \| `large` \| `xlarge` |
+| | `--dry-run` | Validate and print the lowered + server-defaulted spec; makes no API call |
+| | `--example` | Print a skeleton action spec (no create) |
+| `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
+
+There is **no** `--args`, `--job-name`, `--label`, `--cpu-quota`, or
+`--memory-quota`. The CLI built-in single container job defaults to name
+**`main`**. A YAML `-f` spec still accepts full `command`/`args` arrays and
+`labels` directly — only the CLI convenience flags for those were removed.
+
+### `--command` is a single shell-split flag
+
+`--command` takes one full command line and splits it quote-aware into the
+job's command tokens. Quotes are preserved; all tokens map to the container
+`command` (k8s-style "just give me a command line") and `args` is left empty.
+
+```bash
+--command 'python train.py --epochs 10'   # → ["python","train.py","--epochs","10"]
+--command 'sh -c "echo hi"'               # → ["sh","-c","echo hi"]
+```
+
+### Examples
+
+```bash
+# (a) Minimal inline create — job auto-named "main"
+cocli action create -p my-proj --name train-yolo \
+  --image cr.coscene.io/myorg/train:latest \
+  --command "python train.py --epochs 50" \
+  --env COS_KEY=secret \
+  -P dataset=images \
+  --quota large \
+  -o json
+
+# (b) Spec file — from disk, and from stdin (agent-generated spec)
+cocli action create -p my-proj -f action.yaml
+echo "$SPEC" | cocli action create -p my-proj -f -
+
+# (c) Example skeleton + dry-run validate workflow (no API calls)
+cocli action create --example > action.yaml      # skeleton, edit REPLACE-ME/image:tag
+cocli action create -p my-proj -f action.yaml --dry-run   # validate the lowered spec
+```
+
+The `--example` skeleton ships a `REPLACE-ME/image:tag` sentinel; if an
+unedited sentinel survives into a real create, cocli warns to stderr (non-fatal
+— server-side validation is authoritative, but it almost always means a junk
+action).
+
+`--quota` profiles map to fixed CPU/memory tiers — see
+[Resource Options](#resource-options) below. `-f` flags override file fields,
+so you can keep a canonical spec file and tweak per-run.
+
+### CRITICAL: RESOURCE_EXHAUSTED means do-not-retry
+
+If `action create` fails with `RESOURCE_EXHAUSTED` / `NO_SUBSCRIPTION`, cocli
+prints *"likely a missing permission grant, not a quota limit — do not retry"*
+and exits non-zero. This is a **permanent config error** (missing subscription
+or permission grant), **not** a transient quota limit — retrying will never
+succeed. Surface the error to the user and stop; fix it in the coScene web UI
+(grants/subscriptions), not by retrying the create.
+
+---
+
 ## Discover Actions
 
 List all actions available in the current project.
