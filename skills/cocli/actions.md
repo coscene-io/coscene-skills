@@ -128,6 +128,142 @@ succeed. Surface the error to the user and stop; fix it in the coScene web UI
 
 ---
 
+## Get a Single Action
+
+`cocli action get <action> -p <proj> -o table|json|yaml` fetches one action by
+resource name or id.
+
+```bash
+cocli action get my-action -p my-proj -o yaml
+```
+
+The **`-o yaml` / `-o json` output is the full-fidelity `Action`** (name,
+author, timestamps, and the complete `spec`) — and it is the *exact* format
+`action update -f` consumes. This is the get → edit → update loop:
+
+```bash
+cocli action get my-action -p my-proj -o yaml > spec.yaml
+# ...edit spec.yaml...
+cocli action update my-action -p my-proj -f spec.yaml
+```
+
+**Secrets show as `********` placeholders** (the backend desensitizes them in
+the dump). Leave those placeholders unchanged when you edit — the backend
+restores the real values on update (see Update below).
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug |
+| `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) — default `table` |
+
+A resolve-first client-side check gives a clean `failed to find action`
+message when the id doesn't exist.
+
+---
+
+## Update an Action
+
+`cocli action update <action> -p <proj> -f <file|-> [--dry-run] [-o ...]`
+replaces an action's spec **wholesale from a file** (or `-` for stdin).
+
+Update is **spec-only, loaded from a file — NOT from flags.** The file is the
+full-fidelity `Action` format that `action get -o yaml/json` emits, so the
+get → edit → update loop round-trips. There is no inline `--name` /
+`--description` / `--label` on update; edit the dump and feed it back.
+
+```bash
+# Full round-trip
+cocli action get my-action -p my-proj -o yaml > spec.yaml
+# ...edit spec.yaml...
+cocli action update my-action -p my-proj -f spec.yaml
+
+# From stdin
+cat spec.yaml | cocli action update my-action -p my-proj -f -
+
+# Preview the exact spec that would be sent — makes NO wire call
+cocli action update my-action -p my-proj -f spec.yaml --dry-run
+```
+
+Update is a **full spec replace** (the update mask is fixed to `spec`; cocli
+never crafts it). Only the spec is written — name, author, and timestamps are
+untouched, and the positional id selects which action to write.
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug |
+| `-f` | `--file` | Action spec file (`-` for stdin) — the format `get -o yaml/json` emits |
+| | `--dry-run` | Print the spec that would be sent; makes no API call |
+| `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
+
+### CRITICAL: update replaces `spec.labels` too
+
+The submitted spec replaces the **entire** spec, **including `spec.labels`**. A
+spec that **omits** `labels` **detaches every label** on the action. The `get`
+dump carries the labels, so an unedited round-trip preserves them — but a
+hand-written spec that drops the `labels` block wipes them. cocli warns to
+stderr when the submitted spec has no labels but the current action does.
+
+### Masked secrets — leave `********` unchanged
+
+Secrets appear as `********` placeholders in a `get` dump. **Do not edit a
+placeholder you aren't changing** — submit it verbatim and the backend restores
+the real stored secret. Only replace a placeholder when you genuinely want to
+set a new value.
+
+### After-update re-get
+
+After a successful update cocli **re-fetches** the action. If that re-get
+returns not-found, cocli prints a loud warning — *"update reported success but
+the action is no longer retrievable; it may have been deleted."* This surfaces a
+backend footgun where an update can silently write to an action that was deleted
+between your `get` and `update`. Treat the warning as a real failure.
+
+Like `create`, a `RESOURCE_EXHAUSTED` / `NO_SUBSCRIPTION` failure means a
+missing permission grant, **not** a quota limit — do not retry (see the
+do-not-retry note under Create).
+
+---
+
+## Delete an Action
+
+`cocli action delete <action> -p <proj> [-f/--force]` deletes an action by
+resource name or id.
+
+```bash
+# Prompts for confirmation (states the trigger side effect):
+cocli action delete my-action -p my-proj
+
+# Skip the confirmation prompt (automation):
+cocli action delete my-action -p my-proj -f
+```
+
+**Delete is a soft delete** — the action stops appearing in `action list`, but
+historical runs are unaffected (they are snapshotted at run time).
+
+### CRITICAL: delete also disables the action's triggers
+
+Deleting an action **also soft-deletes every trigger bound to it**, in the same
+operation. This is silent — the command returns success without a count. The
+confirmation prompt and help text both state it: *"This also disables any
+triggers bound to it."* Do not delete an action whose triggers you still need.
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug |
+| `-f` | `--force` | Skip the confirmation prompt |
+
+A resolve-first client-side check yields a clean `failed to find action`
+message for an unknown id. Note the backend delete is **idempotent** — a repeat
+delete of an already-gone action still reports success.
+
+---
+
 ## Discover Actions
 
 List all actions available in the current project.
