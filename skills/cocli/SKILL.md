@@ -194,7 +194,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 
 | Task | Command | JSON? |
 |---|---|---|
-| Create action (inline single container; job auto-named `main`) | `cocli action create -p <slug> --name <n> --image <img> --command "python run.py" -o json` (quota is spec-file only, via `-f spec.yaml` `quota.cpu`/`quota.memory`) | Yes |
+| Create action (inline single container; job auto-named `main`) | `cocli action create -p <slug> --name <n> --image <img> --command "python run.py" --quota small -o json` (quota via `--quota small\|medium\|large\|xlarge` preset or `-f spec.yaml` `quota.cpu`/`quota.memory`) | Yes |
 | Create action from spec file / stdin | `cocli action create -p <slug> -f action.yaml` (`-f -` for stdin) | Yes |
 | List available actions | `cocli action list -o json` | Yes |
 | Get one action (`-o yaml/json` is `update -f`'s input format) | `cocli action get <action> -p <slug> -o yaml` | Yes |

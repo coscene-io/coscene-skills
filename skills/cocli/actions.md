@@ -66,16 +66,24 @@ Flags override file fields when both are set.
 | | `--command` | Container command line — shell-split, quote-aware (inline mode; see below) |
 | | `--env` | Container env `key=value` (repeatable; inline mode) |
 | `-P` | `--param` | Action parameter default `key=value` (repeatable) |
+| | `--quota` | Resource preset `small`\|`medium`\|`large`\|`xlarge` (convenience; overrides file `quota.cpu`/`quota.memory`) |
 | | `--dry-run` | Validate and print the lowered + server-defaulted spec; makes no API call |
 | | `--example` | Print a skeleton action spec (no create) |
 | `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
 
-There is **no** `--args`, `--job-name`, `--label`, `--quota`, `--cpu-quota`, or
+There is **no** `--args`, `--job-name`, `--label`, `--cpu-quota`, or
 `--memory-quota`. The CLI built-in single container job defaults to name
 **`main`**. A YAML `-f` spec still accepts full `command`/`args` arrays,
-`labels`, and `quota` directly — only the CLI convenience flags for those were
-removed. Quota is set in the spec file with the proto-native enum strings (same
-form `get -o yaml`/`update` use):
+`labels`, and `quota` directly — those CLI convenience flags were removed.
+
+Quota can be set two ways:
+
+- **`--quota` preset** (convenience) — `small` | `medium` | `large` | `xlarge`
+  maps a t-shirt size to the proto CPU/memory enum pair and sets the spec's
+  quota. `--quota` overrides any file `quota:` (the flag wins).
+  (`small`→1C/2G, `medium`→2C/4G, `large`→4C/8G, `xlarge`→8C/16G.)
+- **Spec-file `quota.cpu` / `quota.memory`** — the proto-native enum strings
+  (same form `get -o yaml`/`update` use):
 
 ```yaml
 quota:
@@ -119,9 +127,10 @@ unedited sentinel survives into a real create, cocli warns to stderr (non-fatal
 — server-side validation is authoritative, but it almost always means a junk
 action).
 
-Quota is spec-file only (`quota.cpu` / `quota.memory` proto enum strings) — see
-[Resource Options](#resource-options) below. `-f` flags override file fields,
-so you can keep a canonical spec file and tweak per-run.
+Quota is set either with the `--quota small|medium|large|xlarge` preset or the
+spec-file `quota.cpu` / `quota.memory` proto enum strings (the flag overrides
+the file) — see [Resource Options](#resource-options) below. `-f` flags override
+file fields, so you can keep a canonical spec file and tweak per-run.
 
 ### CRITICAL: RESOURCE_EXHAUSTED means do-not-retry
 
@@ -494,9 +503,13 @@ When an action executes, the platform injects environment variables and mounts r
 
 ### Resource Options
 
-Quota is set in the spec file with the proto-native `quota.cpu` / `quota.memory`
-enum strings (the same form `get -o yaml` / `update` use). Empty cpu and memory
-leaves quota unset (server-defaulted).
+Quota can be set two ways on `action create`: the `--quota small|medium|large|xlarge`
+convenience preset, or the spec-file `quota.cpu` / `quota.memory` proto-native
+enum strings (the same form `get -o yaml` / `update` use). `--quota` overrides
+any file `quota:`. Empty cpu and memory leaves quota unset (server-defaulted).
+The presets map to: `small`→`CPU_QUOTA_1C`/`MEMORY_QUOTA_2G`,
+`medium`→`CPU_QUOTA_2C`/`MEMORY_QUOTA_4G`, `large`→`CPU_QUOTA_4C`/`MEMORY_QUOTA_8G`,
+`xlarge`→`CPU_QUOTA_8C`/`MEMORY_QUOTA_16G`.
 
 | `quota.cpu` | CPU | | `quota.memory` | Memory |
 |---|---|---|---|---|
