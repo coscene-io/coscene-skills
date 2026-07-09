@@ -66,15 +66,22 @@ Flags override file fields when both are set.
 | | `--command` | Container command line — shell-split, quote-aware (inline mode; see below) |
 | | `--env` | Container env `key=value` (repeatable; inline mode) |
 | `-P` | `--param` | Action parameter default `key=value` (repeatable) |
-| | `--quota` | Resource profile: `small` \| `medium` \| `large` \| `xlarge` |
 | | `--dry-run` | Validate and print the lowered + server-defaulted spec; makes no API call |
 | | `--example` | Print a skeleton action spec (no create) |
 | `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
 
-There is **no** `--args`, `--job-name`, `--label`, `--cpu-quota`, or
+There is **no** `--args`, `--job-name`, `--label`, `--quota`, `--cpu-quota`, or
 `--memory-quota`. The CLI built-in single container job defaults to name
-**`main`**. A YAML `-f` spec still accepts full `command`/`args` arrays and
-`labels` directly — only the CLI convenience flags for those were removed.
+**`main`**. A YAML `-f` spec still accepts full `command`/`args` arrays,
+`labels`, and `quota` directly — only the CLI convenience flags for those were
+removed. Quota is set in the spec file with the proto-native enum strings (same
+form `get -o yaml`/`update` use):
+
+```yaml
+quota:
+  cpu: CPU_QUOTA_1C     # CPU_QUOTA_1C | CPU_QUOTA_2C | CPU_QUOTA_4C | CPU_QUOTA_8C
+  memory: MEMORY_QUOTA_2G # MEMORY_QUOTA_1G | _2G | _4G | _8G | _16G | _32G | _64G
+```
 
 ### `--command` is a single shell-split flag
 
@@ -96,7 +103,6 @@ cocli action create -p my-proj --name train-yolo \
   --command "python train.py --epochs 50" \
   --env COS_KEY=secret \
   -P dataset=images \
-  --quota large \
   -o json
 
 # (b) Spec file — from disk, and from stdin (agent-generated spec)
@@ -113,7 +119,7 @@ unedited sentinel survives into a real create, cocli warns to stderr (non-fatal
 — server-side validation is authoritative, but it almost always means a junk
 action).
 
-`--quota` profiles map to fixed CPU/memory tiers — see
+Quota is spec-file only (`quota.cpu` / `quota.memory` proto enum strings) — see
 [Resource Options](#resource-options) below. `-f` flags override file fields,
 so you can keep a canonical spec file and tweak per-run.
 
@@ -488,16 +494,21 @@ When an action executes, the platform injects environment variables and mounts r
 
 ### Resource Options
 
-Actions can be configured with these CPU/memory profiles:
+Quota is set in the spec file with the proto-native `quota.cpu` / `quota.memory`
+enum strings (the same form `get -o yaml` / `update` use). Empty cpu and memory
+leaves quota unset (server-defaulted).
 
-| Profile | CPU | Memory |
-|---|---|---|
-| Small | 1 core | 2 GB |
-| Medium | 2 cores | 4 GB |
-| Large | 4 cores | 8 GB |
-| XLarge | 8 cores | 16 GB |
+| `quota.cpu` | CPU | | `quota.memory` | Memory |
+|---|---|---|---|---|
+| `CPU_QUOTA_1C` | 1 core | | `MEMORY_QUOTA_1G` | 1 GB |
+| `CPU_QUOTA_2C` | 2 cores | | `MEMORY_QUOTA_2G` | 2 GB |
+| `CPU_QUOTA_4C` | 4 cores | | `MEMORY_QUOTA_4G` | 4 GB |
+| `CPU_QUOTA_8C` | 8 cores | | `MEMORY_QUOTA_8G` | 8 GB |
+| | | | `MEMORY_QUOTA_16G` | 16 GB |
+| | | | `MEMORY_QUOTA_32G` | 32 GB |
+| | | | `MEMORY_QUOTA_64G` | 64 GB |
 
-Contact support for custom resource profiles above 8C/16G.
+Contact support for custom resource quotas above 8C/64G.
 
 ### COS_TOKEN Permission Model
 
