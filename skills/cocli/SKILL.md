@@ -205,7 +205,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
 | Print a run's logs (running → live pod logs, finished → archived log, same command) | `cocli action logs <action-run> -p <slug>` | No |
 | Follow live logs, wait for the run to start | `cocli action logs <action-run> -p <slug> -f` | No |
-| Logs for a specific job index / DAG node | `cocli action logs <action-run> -p <slug> -j 0 --node <node>` | No |
+| Logs for a specific job index (1-based, `-j 1` = first) / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
 
 `<action-run>` is a full resource name (`projects/<project>/actionRuns/<uuid>`) or a bare UUID.
 Here `-f` means **`--follow`** (stream and reconnect on transient errors), **not** `--force`.
