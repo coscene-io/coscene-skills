@@ -21,7 +21,7 @@ Read on-demand — not on every invocation.
 | `./setup.md` | Preflight reports non-OK status, or user needs install/profile/prefs setup |
 | `./records.md` | Working with record lifecycle, file operations, or moments |
 | `./workflows.md` | Building multi-step workflows or following templates |
-| `./actions.md` | Running actions, monitoring runs, or understanding automation runtime |
+| `./actions.md` | Creating, running, or monitoring actions, or understanding automation runtime |
 
 ## Sister Skill
 
@@ -120,7 +120,7 @@ cocli has several commands that prompt for interactive input. In agent/automatio
 
 | Flag | Commands | Purpose |
 |---|---|---|
-| `-f` / `--force` | `delete`, `copy`, `move`, `action run` | Skip confirmation prompts |
+| `-f` / `--force` | `delete`, `copy`, `move`, `action run`, `action delete` | Skip confirmation prompts (`action delete` also disables the action's triggers) |
 | `-y` / `--yes` | `project create` | Skip creation confirmation |
 | `--skip-params` | `action run` (without `-P`) | Skip param prompts, use defaults. Mutex with `-P`. |
 | `--no-tty` | `upload` commands | Disable TTY progress bars |
@@ -194,13 +194,18 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 
 | Task | Command | JSON? |
 |---|---|---|
+| Create action (inline single container; job auto-named `main`) | `cocli action create -p <slug> --name <n> --image <img> --command "python run.py" --quota small -o json` (inline `--quota small\|medium\|large\|xlarge` preset) | Yes |
+| Create action from spec file / stdin (file is the full spec; inline spec flags like `--name`/`--quota` cannot be combined with `-f`) | `cocli action create -p <slug> -f action.yaml` (`-f -` for stdin) | Yes |
 | List available actions | `cocli action list -o json` | Yes |
+| Get one action (`-o yaml/json` is `update -f`'s input format) | `cocli action get <action> -p <slug> -o yaml` | Yes |
+| Update an action's spec from a file (full spec replace; get → edit → update loop) | `cocli action update <action> -p <slug> -f spec.yaml` (`-f -` for stdin; `--dry-run` to preview) | Yes |
+| Delete an action (soft delete; also disables its triggers) | `cocli action delete <action> -p <slug> -f` | No |
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
 | Print a run's logs (running → live pod logs, finished → archived log, same command) | `cocli action logs <action-run> -p <slug>` | No |
 | Follow live logs, wait for the run to start | `cocli action logs <action-run> -p <slug> -f` | No |
-| Logs for a specific job index / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
+| Logs for a specific job index (1-based, `-j 1` = first) / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
 
 `<action-run>` is a full resource name (`projects/<project>/actionRuns/<uuid>`) or a bare UUID.
 Here `-f` means **`--follow`** (stream and reconnect on transient errors), **not** `--force`.
@@ -302,7 +307,7 @@ Go to Preflight section above.
 ### Commands with `-o json`
 
 Parse JSON directly. Common examples: `action list`, `action list-run`,
-`project list`, `project create`, `project file list`, `record list`,
+`action get`, `action update`, `project list`, `project create`, `project file list`, `record list`,
 `record create`, `record describe`, `record file list`, `record moment list`,
 `user list`, `user get`, `role list`, `registry create-credential`.
 
