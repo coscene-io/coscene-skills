@@ -52,21 +52,25 @@ Image checklist before configuring an action:
   parameterized, or storage/mount/quota-configured actions. Use `--example` to
   get a skeleton, edit it, then `-f` it back in.
 
-Flags override file fields when both are set.
+Use flags **or** a file, not both: `-f` is the full, authoritative spec, so the
+spec-content flags (`--name`, `--description`, `--image`, `--command`, `--env`,
+`--param`/`-P`, `--quota`) cannot be combined with `-f` — doing so is a clean
+error. Only operational flags (`-p`/`--project`, `--dry-run`, `-o`/`--output`)
+work alongside `-f`.
 
 ### Flag Reference
 
 | Flag | Long | Description |
 |---|---|---|
 | `-p` | `--project` | Project slug (falls back to the profile default) |
-| `-f` | `--file` | Action spec YAML/JSON file (`-` for stdin) |
-| | `--name` | Action name (inline mode) |
-| | `--description` | Action description (inline mode) |
-| | `--image` | Container image (inline mode) |
-| | `--command` | Container command line — shell-split, quote-aware (inline mode; see below) |
-| | `--env` | Container env `key=value` (repeatable; inline mode) |
-| `-P` | `--param` | Action parameter default `key=value` (repeatable) |
-| | `--quota` | Resource preset `small`\|`medium`\|`large`\|`xlarge` (convenience; overrides file `quota.cpu`/`quota.memory`) |
+| `-f` | `--file` | Action spec YAML/JSON file (`-` for stdin) — the full spec; cannot be combined with the inline spec flags below |
+| | `--name` | Action name (inline mode; not with `-f`) |
+| | `--description` | Action description (inline mode; not with `-f`) |
+| | `--image` | Container image (inline mode; not with `-f`) |
+| | `--command` | Container command line — shell-split, quote-aware (inline mode; not with `-f`; see below) |
+| | `--env` | Container env `key=value` (repeatable; inline mode; not with `-f`) |
+| `-P` | `--param` | Action parameter default `key=value` (repeatable; inline mode; not with `-f`) |
+| | `--quota` | Resource preset `small`\|`medium`\|`large`\|`xlarge` (convenience for `quota.cpu`/`quota.memory`; inline mode; not with `-f`) |
 | | `--dry-run` | Validate and print the lowered + server-defaulted spec; makes no API call |
 | | `--example` | Print a skeleton action spec (no create) |
 | `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
@@ -78,9 +82,10 @@ There is **no** `--args`, `--job-name`, `--label`, `--cpu-quota`, or
 
 Quota can be set two ways:
 
-- **`--quota` preset** (convenience) — `small` | `medium` | `large` | `xlarge`
-  maps a t-shirt size to the proto CPU/memory enum pair and sets the spec's
-  quota. `--quota` overrides any file `quota:` (the flag wins).
+- **`--quota` preset** (convenience, inline mode only) — `small` | `medium` |
+  `large` | `xlarge` maps a t-shirt size to the proto CPU/memory enum pair and
+  sets the spec's quota. Cannot be combined with `-f`; a `-f` spec sets quota
+  via `quota.cpu` / `quota.memory` instead.
   (`small`→1C/2G, `medium`→2C/4G, `large`→4C/8G, `xlarge`→8C/16G.)
 - **Spec-file `quota.cpu` / `quota.memory`** — the proto-native enum strings
   (same form `get -o yaml`/`update` use):
@@ -127,10 +132,10 @@ unedited sentinel survives into a real create, cocli warns to stderr (non-fatal
 — server-side validation is authoritative, but it almost always means a junk
 action).
 
-Quota is set either with the `--quota small|medium|large|xlarge` preset or the
-spec-file `quota.cpu` / `quota.memory` proto enum strings (the flag overrides
-the file) — see [Resource Options](#resource-options) below. `-f` flags override
-file fields, so you can keep a canonical spec file and tweak per-run.
+Quota is set either with the `--quota small|medium|large|xlarge` preset (inline
+mode) or the spec-file `quota.cpu` / `quota.memory` proto enum strings — see
+[Resource Options](#resource-options) below. The two authoring modes are
+mutually exclusive: use inline flags **or** a `-f` spec file, not both.
 
 ### CRITICAL: RESOURCE_EXHAUSTED means do-not-retry
 
@@ -504,9 +509,10 @@ When an action executes, the platform injects environment variables and mounts r
 ### Resource Options
 
 Quota can be set two ways on `action create`: the `--quota small|medium|large|xlarge`
-convenience preset, or the spec-file `quota.cpu` / `quota.memory` proto-native
-enum strings (the same form `get -o yaml` / `update` use). `--quota` overrides
-any file `quota:`. Empty cpu and memory leaves quota unset (server-defaulted).
+convenience preset (inline mode), or the spec-file `quota.cpu` / `quota.memory`
+proto-native enum strings (the same form `get -o yaml` / `update` use). The two
+are mutually exclusive — `--quota` cannot be combined with `-f` (the file is
+authoritative). Empty cpu and memory leaves quota unset (server-defaulted).
 The presets map to: `small`→`CPU_QUOTA_1C`/`MEMORY_QUOTA_2G`,
 `medium`→`CPU_QUOTA_2C`/`MEMORY_QUOTA_4G`, `large`→`CPU_QUOTA_4C`/`MEMORY_QUOTA_8G`,
 `xlarge`→`CPU_QUOTA_8C`/`MEMORY_QUOTA_16G`.
