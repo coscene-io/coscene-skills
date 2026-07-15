@@ -313,7 +313,7 @@ cocli record list --labels "status=stale" --all -o json | jq 'length'
 **What can go wrong:**
 - Step 3: Without `-f`, each delete prompts for confirmation — blocks in automation.
 - Step 3: Deletion is permanent. There is no undo. The dry run in Step 2 is critical.
-- Step 1: If `--labels` doesn't find stale records, check if the label key/value is exact.
+- Step 1: A label that doesn't exist in the project fails the command (`Exit 1 + "labels not found: status=stale"`), it no longer returns the full unfiltered list — check the label key/value is exact. Empty output (`0`) at Step 4 means the label exists but matches no records.
 
 ---
 
