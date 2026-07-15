@@ -385,3 +385,4 @@ These are hard rules. Do not reason around them.
 | Action run returns 0 but nothing happened | action run is ASYNC | Poll `action list-run -r <record> -o json` for actual status |
 | "interactive input" error | Missing `-f`, `-P`, or `--skip-params` | Add `-f` and either `-P key=val` or `--skip-params` to action run; `--no-tty` to uploads |
 | Record search returns empty | Wrong project context | Verify project with `cocli login current`; try `--all` flag |
+| Exit 1 + "labels not found" | `--labels` value absent in project (typo/casing, or wrong project) | Fix the label spelling; list valid labels. The query does not fall back to unfiltered results |

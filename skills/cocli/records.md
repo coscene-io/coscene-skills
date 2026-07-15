@@ -295,6 +295,8 @@ cocli record list --labels "env=prod" --keywords "lidar" -o json
 cocli record list --include-archive -o json
 ```
 
+**Unresolved label = hard error.** `--labels` resolves each label name to an ID in the project before querying. If any label does not exist in the project, the command fails with `Exit 1 + "labels not found: <name>"` and runs no query — it does **not** fall back to returning all records. Partial matches fail too: `--labels "env=prod" --labels "typo"` aborts even though `env=prod` exists. When a filter errors, fix the label spelling/casing rather than assuming zero matches. (Fixed in coCLI [#188](https://github.com/coscene-io/coCLI/pull/188); older builds silently returned the full unfiltered list.)
+
 ---
 
 ## Batch Patterns
