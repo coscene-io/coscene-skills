@@ -120,14 +120,14 @@ cocli has several commands that prompt for interactive input. In agent/automatio
 
 | Flag | Commands | Purpose |
 |---|---|---|
-| `-f` / `--force` | `delete`, `copy`, `move`, `action run`, `action delete` | Skip confirmation prompts (`action delete` also disables the action's triggers) |
+| `-f` / `--force` | `delete`, `copy`, `move`, `action run`, `action delete`, `action cancel-run` | Skip confirmation prompts (`action delete` also disables triggers; `action cancel-run` is irreversible) |
 | `-y` / `--yes` | `project create` | Skip creation confirmation |
 | `--skip-params` | `action run` (without `-P`) | Skip param prompts, use defaults. Mutex with `-P`. |
 | `--no-tty` | `upload` commands | Disable TTY progress bars |
 
 ### Destructive or Bulk Operations
 
-For delete, move, overwrite, and bulk metadata updates:
+For delete, move, overwrite, action-run cancellation, and bulk metadata updates:
 
 1. Read back and show the exact target list first.
 2. Explain what will change and whether it is reversible.
@@ -203,13 +203,15 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
+| Cancel an action run (async; confirm the exact target before `-f`) | `cocli action cancel-run <action-run> -p <slug> -f` | No |
 | Print a run's logs (running → live pod logs, finished → archived log, same command) | `cocli action logs <action-run> -p <slug>` | No |
 | Follow live logs, wait for the run to start | `cocli action logs <action-run> -p <slug> -f` | No |
 | Logs for a specific job index (1-based, `-j 1` = first) / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
 
 `<action-run>` is a full resource name (`projects/<project>/actionRuns/<uuid>`) or a bare UUID.
-Here `-f` means **`--follow`** (stream and reconnect on transient errors), **not** `--force`.
-Without `-f`, a not-yet-started run is reported and the command exits; logs is a streaming text
+For `action logs`, `-f` means **`--follow`** (stream and reconnect on transient errors), **not**
+`--force`. For `action cancel-run`, `-f` means **`--force`** and skips the irreversible-action
+confirmation. Without `-f`, logs reports a not-yet-started run and exits; logs is a streaming text
 command (no `-o json`) — exit `0` = success, `1` = error (check stderr).
 
 ### Registry and Action Images
@@ -287,6 +289,16 @@ Match user intent to the correct command sequence.
    run live (waits if it hasn't started). Once the run finishes, the archived log is printed
    automatically, so the same command works mid-run or after completion.
 
+**Cancel a running action:**
+
+1. Identify the exact run with `cocli action list-run -o json`.
+2. Show the target to the user and get explicit confirmation.
+3. Request cancellation with `cocli action cancel-run <action-run> -p <slug> -f`.
+4. Poll `action list-run` until the state is `ABORTED`; cancellation is asynchronous.
+
+If the run is already `SUCCEEDED`, `FAILED`, or `ABORTED`, cocli reports that it has finished
+and sends no cancellation request.
+
 **Cross-project transfer:**
 
 - Copy: `cocli record copy <record> -P <dst-project> -f`
@@ -362,6 +374,7 @@ These are hard rules. Do not reason around them.
 | "I'll skip `--skip-params` on action run" | Use `--skip-params` for defaults (no `-P`), or `-P key=val` for explicit params. They are mutually exclusive — never combine. |
 | "I'll use `--page` for pagination" | Use `--page-token` or `--all`. `--page` is deprecated for records. |
 | "Action run returned 0, so the action completed" | action run is ASYNC. Exit 0 means submitted, not completed. Poll `action list-run`. |
+| "`cancel-run` returned 0, so the run is already aborted" | Cancellation is ASYNC. Poll `action list-run` until `ABORTED`; an already-finished run also exits 0 without sending a cancellation request. |
 | "I'll upload without `--no-tty`" | In non-interactive contexts, always pass `--no-tty` to prevent TTY prompts. |
 | "I'll use `login switch` to change profile" | NEVER in automation. `login switch` uses an interactive TUI menu — hangs without TTY. Use `cocli login set -n <name>` to switch persistently, or `--profile <name>` on a single command (no config mutation, safe for concurrent runs). |
 | "I'll guess the registry host" | NEVER. Use `cocli registry create-credential -o json` or `cocli registry login` to discover/authenticate the active org registry. |
