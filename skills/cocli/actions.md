@@ -435,7 +435,7 @@ cocli action list-run -r records/abc-123 -o json
 ```
 
 **Key fields:**
-- `state` — `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`
+- `state` — `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `ABORTED`
 - `name` — run identifier
 - `action` — which action was executed
 - `record` — which record it operated on
@@ -464,6 +464,10 @@ while true; do
       echo "Run failed. Check logs in coScene web UI."
       exit 1
       ;;
+    ABORTED)
+      echo "Run was aborted."
+      break
+      ;;
     *)
       sleep 15
       ;;
@@ -475,6 +479,75 @@ done
 - `.[0]` assumes most-recent run is first. If multiple actions target the same record, filter by action name: `jq '.[] | select(.action == "actions/yolo-inference") | .state'`
 - Poll interval of 10-15 seconds is reasonable. Actions typically take minutes to hours.
 - There is no webhook or callback mechanism for run completion via CLI. Polling is the only option.
+
+---
+
+## Cancel a Run
+
+`cocli action cancel-run <action-run> [-p <proj>] [-f/--force]` requests
+cancellation of an action run.
+
+`<action-run>` may be either:
+
+- A full resource name: `projects/<project-uuid>/actionRuns/<run-uuid>`.
+- A bare run UUID, resolved in the current project or the project selected by
+  `-p/--project`.
+
+```bash
+# Prompts because cancellation cannot be undone
+cocli action cancel-run 22222222-2222-2222-2222-222222222222 -p my-proj
+
+# Non-interactive, after the user has explicitly confirmed the exact target
+cocli action cancel-run \
+  projects/11111111-1111-1111-1111-111111111111/actionRuns/22222222-2222-2222-2222-222222222222 \
+  -f
+```
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug used to resolve a bare run UUID |
+| `-f` | `--force` | Skip the irreversible-action confirmation |
+
+### CRITICAL: cancellation is asynchronous
+
+A successful request prints:
+
+```text
+Action run cancellation requested successfully.
+```
+
+This means the server accepted the request, **not** that the run is already
+aborted. Poll `action list-run` until the target state is `ABORTED`. Do not
+automatically retry cancellation or assume submission success is terminal
+success.
+
+### Finished runs are a successful no-op
+
+Before requesting cancellation, cocli checks the run's current state. For
+`SUCCEEDED`, `FAILED`, or `ABORTED`, it prints:
+
+```text
+Action run has already finished with state <STATE>. No cancellation request was sent.
+```
+
+The command exits 0 and does not send a cancellation request. `PENDING`,
+`RUNNING`, and unspecified states proceed to the cancellation request.
+
+Unknown runs, permission failures, state-query failures, and server rejection
+return a non-zero exit. There is no batch cancellation or automatic wait for
+the final state.
+
+### Agent safety rule
+
+Cancellation cannot be undone. Before using `-f` in an agent or automation
+flow:
+
+1. Read back and show the exact ActionRun resource name.
+2. Explain that cancellation is irreversible and asynchronous.
+3. Obtain explicit user confirmation.
+4. Run `cancel-run -f`, then verify the final state with `list-run`.
 
 ---
 
