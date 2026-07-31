@@ -333,10 +333,12 @@ cocli action list -o json
 
 ## Run an Action
 
-Submit an action for execution against a record.
+Submit an action for execution against one record or against records selected by
+a server-side JSON Logic query.
 
 ```bash
 cocli action run <action-name> <record-name> -P key=val -f
+cocli action run <action-name> --search '<json-logic>' --skip-params -f
 ```
 
 ### CRITICAL: action run is ASYNC
@@ -349,28 +351,67 @@ cocli action run <action-name> <record-name> -P key=val -f
 |---|---|---|
 | `-p` | `--project` | Project slug |
 | `-P` | `--param` | Parameter key=value pair (repeatable) |
+| `-s` | `--search` | JSON Logic query selecting records for the ActionRun |
 | | `--skip-params` | Skip interactive prompts for missing parameters |
 | `-f` | `--force` | Skip confirmation prompt |
 
-### Non-Interactive Pattern (required for automation)
+### Record Selection
 
-Two valid patterns — `-P` and `--skip-params` are **mutually exclusive**:
+Choose exactly one record-selection mode:
 
 ```bash
-# Pattern 1: Explicit params (overrides defaults)
+# One record
+cocli action run actions/yolo-inference records/abc-123 \
+  -P model=yolov8n \
+  -f
+
+# Records selected by JSON Logic; do not pass a positional record
+cocli action run actions/yolo-inference \
+  --search '{"and":[{"==":[{"var":"isArchived"},"false"]},{"==":[{"var":"labels.env"},"prod"]}]}' \
+  -P model=yolov8n \
+  -f
+```
+
+The positional record and `--search` / `-s` are mutually exclusive. An empty or
+invalid search fails before submission. The CLI sends the query directly on the
+ActionRun; it does not list records or expand the query into record names
+locally.
+
+Use `cocli record list -s '<json-logic>' -o json` to verify a query before a
+mutating run. Keep the same project context for verification and submission.
+
+### Non-Interactive Pattern (required for automation)
+
+Record selection and parameter selection are independent. For parameters, `-P`
+and `--skip-params` are **mutually exclusive**:
+
+```bash
+# Pattern 1: One record with explicit params (overrides defaults)
 cocli action run actions/yolo-inference records/abc-123 \
   -P model=yolov8n \
   -P threshold=0.5 \
   -f
 
-# Pattern 2: All defaults (skip param prompts)
+# Pattern 2: One record with all defaults (skip param prompts)
 cocli action run actions/decompress records/abc-123 -f --skip-params
+
+# Pattern 3: Search-selected records with all defaults
+cocli action run actions/decompress \
+  --search '{"==":[{"var":"labels.env"},"prod"]}' \
+  -f \
+  --skip-params
 
 # WRONG — will hang waiting for input
 cocli action run actions/yolo-inference records/abc-123
 
 # WRONG — -P and --skip-params are mutually exclusive
 cocli action run actions/yolo-inference records/abc-123 -P model=yolov8n -f --skip-params
+
+# WRONG — positional record and --search are mutually exclusive
+cocli action run actions/yolo-inference records/abc-123 \
+  --search '{"==":[{"var":"labels.env"},"prod"]}' \
+  -f \
+  --skip-params
 ```
 
 Without `-f`: the command prompts for confirmation.
@@ -477,6 +518,9 @@ done
 
 **Notes on polling:**
 - `.[0]` assumes most-recent run is first. If multiple actions target the same record, filter by action name: `jq '.[] | select(.action == "actions/yolo-inference") | .state'`
+- A search-based ActionRun is not scoped to one positional record. Poll
+  `cocli action list-run -o json`, identify the new run by action and creation
+  time, and use its `name` with `action logs`; do not filter it with `-r`.
 - Poll interval of 10-15 seconds is reasonable. Actions typically take minutes to hours.
 - There is no webhook or callback mechanism for run completion via CLI. Polling is the only option.
 
