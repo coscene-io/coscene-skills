@@ -201,6 +201,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Update an action's spec from a file (full spec replace; get → edit → update loop) | `cocli action update <action> -p <slug> -f spec.yaml` (`-f -` for stdin; `--dry-run` to preview) | Yes |
 | Delete an action (soft delete; also disables its triggers) | `cocli action delete <action> -p <slug> -f` | No |
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
+| Run action on records matching JSON Logic (`--search` is mutex with positional `<record>`) | `cocli action run <action> --search '<json-logic>' --skip-params -f` | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
 | Cancel an action run (async; confirm the exact target before `-f`) | `cocli action cancel-run <action-run> -p <slug> -f` | No |
@@ -289,6 +290,16 @@ Match user intent to the correct command sequence.
    run live (waits if it hasn't started). Once the run finishes, the archived log is printed
    automatically, so the same command works mid-run or after completion.
 
+**Run processing on records matching a search:**
+
+1. Reuse a verified JSON Logic query from `cocli record list -s '<json-logic>' -o json`.
+2. Run once with the query and no positional record:
+   `cocli action run <action> --search '<json-logic>' --skip-params -f`
+3. The query is stored on the ActionRun and evaluated by the server; do not expand it into
+   record names and submit one run per record.
+4. Poll `cocli action list-run -o json` and identify the run by action and creation time.
+   `list-run -r` is only appropriate for a run submitted with one positional record.
+
 **Cancel a running action:**
 
 1. Identify the exact run with `cocli action list-run -o json`.
@@ -372,6 +383,8 @@ These are hard rules. Do not reason around them.
 | "I'll hardcode the endpoint URL for data commands" | NEVER. The active profile handles endpoint selection. Only set an endpoint when creating/updating a profile, then verify with `cocli login current`. |
 | "I'll use `record view` to see the record" | `record view` only prints a URL (or opens browser with `-w`). Use `record describe -o json`. |
 | "I'll skip `--skip-params` on action run" | Use `--skip-params` for defaults (no `-P`), or `-P key=val` for explicit params. They are mutually exclusive — never combine. |
+| "I'll pass both a record and `--search` to action run" | NEVER. Choose one record-selection mode: positional `<record>` or server-side JSON Logic via `--search` / `-s`. |
+| "I'll list matching records and run the action once per record" | Use `action run --search '<json-logic>'` when one ActionRun should retain the record query. Do not expand the query locally. |
 | "I'll use `--page` for pagination" | Use `--page-token` or `--all`. `--page` is deprecated for records. |
 | "Action run returned 0, so the action completed" | action run is ASYNC. Exit 0 means submitted, not completed. Poll `action list-run`. |
 | "`cancel-run` returned 0, so the run is already aborted" | Cancellation is ASYNC. Poll `action list-run` until `ABORTED`; an already-finished run also exits 0 without sending a cancellation request. |
@@ -395,7 +408,8 @@ These are hard rules. Do not reason around them.
 | Exit 1 + "permission" | User lacks access | Check role with `user get`, request access |
 | Upload stalls or is slow | Default parallelism | Increase `-P` (parallel) and tune `-s` (part-size) |
 | Action run fails | Bad params or wrong action name | Run `action list -o json` first; check `-P key=val` pairs |
-| Action run returns 0 but nothing happened | action run is ASYNC | Poll `action list-run -r <record> -o json` for actual status |
+| Action run rejects record selection | Positional record and `--search` were combined, or search is empty/invalid | Pass exactly one selection mode and validate the JSON Logic with `record list -s` |
+| Action run returns 0 but nothing happened | action run is ASYNC | Poll `action list-run -o json`; add `-r <record>` only for a positional-record run |
 | "interactive input" error | Missing `-f`, `-P`, or `--skip-params` | Add `-f` and either `-P key=val` or `--skip-params` to action run; `--no-tty` to uploads |
 | Record search returns empty | Wrong project context | Verify project with `cocli login current`; try `--all` flag |
 | Exit 1 + "labels not found" | `--labels` value absent in project (typo/casing, or wrong project) | Fix the label spelling; list valid labels. The query does not fall back to unfiltered results |
