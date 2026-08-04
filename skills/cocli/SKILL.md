@@ -201,6 +201,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Update an action's spec from a file (full spec replace; get → edit → update loop) | `cocli action update <action> -p <slug> -f spec.yaml` (`-f -` for stdin; `--dry-run` to preview) | Yes |
 | Delete an action (soft delete; also disables its triggers) | `cocli action delete <action> -p <slug> -f` | No |
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
+| **Run one action over many records (default for any multi-record ask)** | `cocli action run <action> -p <slug> -s '<json-logic>' -P key=val -f` (cocli ≥ v1.7.7; dry-run the query with `record list -s` first; mutex with `<record>`) | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
 | Cancel an action run (async; confirm the exact target before `-f`) | `cocli action cancel-run <action-run> -p <slug> -f` | No |
@@ -278,6 +279,16 @@ Match user intent to the correct command sequence.
 1. `cocli record list --keywords "lidar" -o json` (or `--labels`, `-s` for JSON Logic)
 2. Pick record → `cocli record describe <record> -o json`
 3. Download: `cocli record download <record> <dst-dir>` (all) or `cocli record file download <record> <dst-dir> --files "specific.bag"`
+
+**Run processing on many records (the common case — one run, not a loop):**
+
+1. `cocli -v` → confirm ≥ v1.7.7 (`-s` on `action run`); older, tell the user to `cocli update`
+2. Dry-run the selection: `cocli record list -p <slug> -s '<json-logic>' -o json`
+3. Same query, one run: `cocli action run <action> -p <slug> -s '<json-logic>' -P key=val -f`
+4. Poll `cocli action list-run -p <slug> -o json` → `progress.succeeded` counts records
+
+Never loop `action run` per record for a set — see `./actions.md` § Run One Action
+Over Many Records.
 
 **Run processing on a record:**
 

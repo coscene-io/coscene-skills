@@ -351,6 +351,7 @@ cocli action run <action-name> <record-name> -P key=val -f
 | `-P` | `--param` | Parameter key=value pair (repeatable) |
 | | `--skip-params` | Skip interactive prompts for missing parameters |
 | `-f` | `--force` | Skip confirmation prompt |
+| `-s` | `--search` | JSON Logic record query — one run over every matching record (**requires cocli ≥ v1.7.7**; mutex with the `<record>` argument) |
 
 ### Non-Interactive Pattern (required for automation)
 
@@ -395,6 +396,73 @@ If the action has parameters but you want all defaults, pass `--skip-params` alo
 ```bash
 cocli action run actions/decompress records/abc-123 -f --skip-params
 ```
+
+---
+
+## Run One Action Over Many Records
+
+**Default for any multi-record request.** When the user asks to run an action on
+a set of records — "run it on these 10", "backfill the whole project" — create
+**one run covering all of them** with `-s/--search`. Do not loop `action run`
+per record.
+
+```bash
+# 1. ALWAYS dry-run the query first — record list -s takes the same JSON Logic
+Q='{"and":[{"==":[{"var":"isArchived"},"false"]}]}'
+cocli record list -p <slug> -s "$Q" -o json
+
+# 2. Same query, one run
+cocli action run <action> -p <slug> -s "$Q" -P key=val -f
+```
+
+The platform always supported this — `TriggerMatch.records` is a repeated field
+alongside `record_filter`, and `-s` routes to `CreateActionRunWithRecordQuery`.
+Only the CLI entry point was missing before v1.7.7.
+
+Why this is the default: a 1190-record loop produces 1190 runs, one console row
+each, with no aggregate status — undebuggable for the user who has to review it.
+One run reports `progress: {succeeded: N}` and has a single log stream.
+
+### Version gate — check before using
+
+`-s` does not exist before **v1.7.7**. On an older binary the command fails with
+an unknown-flag error, so check first and degrade deliberately:
+
+```bash
+cocli -v   # "cocli version v1.7.7" or newer
+```
+
+If older: tell the user to run `cocli update`. Only if they decline, fall back to
+a per-record loop — and say explicitly that it creates N runs instead of one.
+
+### Query rules
+
+JSON Logic, the same dialect the web console's advanced search emits.
+
+| `var` | Example |
+|---|---|
+| `isArchived` | `{"==":[{"var":"isArchived"},"false"]}` |
+| `customFields.<field-uuid>` | `{"==":[{"var":"customFields.b6a3d78e-…"},"<option-uuid>"]}` |
+
+`customFields` takes **field and enum-option UUIDs, not display names**. Read them
+off any record that already has the field set:
+
+```bash
+cocli record describe <record> -p <slug> -o json \
+  | jq '.custom_field_values[] | {name: .property.name, id: .property.id, enums}'
+```
+
+### CRITICAL: unsupported query vars are silently ignored
+
+`title` is **accepted and then ignored** — no error, no filtering. A query built
+on it selects *every* record in the project, and the action runs against all of
+them. This is why step 1 above is mandatory: `record list -s` shows exactly what
+the run will touch. Filter by title with `record list --keywords` instead.
+
+### The record argument and `-s` are mutually exclusive
+
+Pass one or the other, never both. With `-s`, omit the `<record>` positional
+entirely.
 
 ---
 
