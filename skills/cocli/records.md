@@ -74,6 +74,23 @@ cocli record update records/abc-123 --delete-labels "env"      # delete
 
 **Mutually exclusive:** pick exactly one of `-l/--labels`, `--update-labels`, or `--delete-labels` per invocation.
 
+#### CRITICAL: `--custom` replaces the whole custom-field list
+
+Unlike `-l`, `--custom` is **not** a merge. It overwrites every custom field on
+the record — anything you omit is erased. On a record carrying human QC labels
+(质检结果, 质检员, 质检时间, …) a partial `--custom` silently destroys them.
+
+Always read-modify-write:
+
+```bash
+cocli record describe <record> -p <slug> -o json   # read existing custom fields
+# merge your change into the FULL list, then send all of them back
+cocli record update <record> -p <slug> --custom '<full list, not just your field>'
+```
+
+If any existing field can't be round-tripped, abort rather than write a partial
+list. Writes to live records are visible to the humans reviewing them.
+
 ### record list — JSON: Yes
 
 List records with filtering and pagination.
