@@ -160,7 +160,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Include archived records | `cocli record list --include-archive -o json` | Yes |
 | Describe single record | `cocli record describe <record> -o json` | Yes |
 | Get record URL | `cocli record view <record>` | No |
-| List moments in record | `cocli record moment list <record> -o json` | Yes |
+| List moments in record (table: `ID`, `DISPLAY NAME`, `TRIGGER TIME`, `DURATION`) | `cocli record moment list <record>` | Yes |
 | Download moments.json | `cocli record moment download <record> <dst-dir>` | No |
 
 ### Modify Records
@@ -173,6 +173,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Delete labels from record | `cocli record update <record> --delete-labels "oldkey"` | No |
 | Delete a record | `cocli record delete <record> -f` | No |
 | Create moment in record (creates a task by default; add `-s` to skip) | `cocli record moment create <record> -n "event" -D 10 -T <epoch-seconds>` | No |
+| Delete one moment (does not delete its associated task) | `cocli record moment delete <moment-resource-name/id> [-p <slug>] -f` | No |
 
 ### Manage Files
 
@@ -321,6 +322,7 @@ and sends no cancellation request.
 - Metadata: `cocli record update <record> -t "new title" -l key=val`
 - Labels: `--update-labels` (replace), `--delete-labels` (remove), `-l` (append)
 - Moments: `cocli record moment create <record> -n "event" -D 10 -T <epoch-seconds>` creates a task by default; add `-s` / `--skip-create-task` for moment-only annotations.
+- Delete one moment: identify it with `record moment list <record> -o json`, confirm the exact Event resource, then run `cocli record moment delete <moment-resource-name> -f`. This does not separately delete an associated task.
 
 **Environment check:**
 Go to Preflight section above.
