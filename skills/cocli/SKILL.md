@@ -21,7 +21,7 @@ Read on-demand — not on every invocation.
 | `./setup.md` | Preflight reports non-OK status, or user needs install/profile/prefs setup |
 | `./records.md` | Working with record lifecycle, file operations, or moments |
 | `./workflows.md` | Building multi-step workflows or following templates |
-| `./actions.md` | Running actions, monitoring runs, or understanding automation runtime |
+| `./actions.md` | Creating, running, or monitoring actions, or understanding automation runtime |
 
 ## Sister Skill
 
@@ -120,14 +120,14 @@ cocli has several commands that prompt for interactive input. In agent/automatio
 
 | Flag | Commands | Purpose |
 |---|---|---|
-| `-f` / `--force` | `delete`, `copy`, `move`, `action run` | Skip confirmation prompts |
+| `-f` / `--force` | `delete`, `copy`, `move`, `action run`, `action delete`, `action cancel-run` | Skip confirmation prompts (`action delete` also disables triggers; `action cancel-run` is irreversible) |
 | `-y` / `--yes` | `project create` | Skip creation confirmation |
 | `--skip-params` | `action run` (without `-P`) | Skip param prompts, use defaults. Mutex with `-P`. |
 | `--no-tty` | `upload` commands | Disable TTY progress bars |
 
 ### Destructive or Bulk Operations
 
-For delete, move, overwrite, and bulk metadata updates:
+For delete, move, overwrite, action-run cancellation, and bulk metadata updates:
 
 1. Read back and show the exact target list first.
 2. Explain what will change and whether it is reversible.
@@ -160,7 +160,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Include archived records | `cocli record list --include-archive -o json` | Yes |
 | Describe single record | `cocli record describe <record> -o json` | Yes |
 | Get record URL | `cocli record view <record>` | No |
-| List moments in record | `cocli record moment list <record> -o json` | Yes |
+| List moments in record (table: `ID`, `DISPLAY NAME`, `TRIGGER TIME`, `DURATION`) | `cocli record moment list <record>` | Yes |
 | Download moments.json | `cocli record moment download <record> <dst-dir>` | No |
 
 ### Modify Records
@@ -173,6 +173,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | Delete labels from record | `cocli record update <record> --delete-labels "oldkey"` | No |
 | Delete a record | `cocli record delete <record> -f` | No |
 | Create moment in record (creates a task by default; add `-s` to skip) | `cocli record moment create <record> -n "event" -D 10 -T <epoch-seconds>` | No |
+| Delete one moment (does not delete its associated task) | `cocli record moment delete <moment-resource-name/id> [-p <slug>] -f` | No |
 
 ### Manage Files
 
@@ -194,17 +195,25 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 
 | Task | Command | JSON? |
 |---|---|---|
+| Create action (inline single container; job auto-named `main`) | `cocli action create -p <slug> --name <n> --image <img> --command "python run.py" --quota small -o json` (inline `--quota small\|medium\|large\|xlarge` preset) | Yes |
+| Create action from spec file / stdin (file is the full spec; inline spec flags like `--name`/`--quota` cannot be combined with `-f`) | `cocli action create -p <slug> -f action.yaml` (`-f -` for stdin) | Yes |
 | List available actions | `cocli action list -o json` | Yes |
+| Get one action (`-o yaml/json` is `update -f`'s input format) | `cocli action get <action> -p <slug> -o yaml` | Yes |
+| Update an action's spec from a file (full spec replace; get → edit → update loop) | `cocli action update <action> -p <slug> -f spec.yaml` (`-f -` for stdin; `--dry-run` to preview) | Yes |
+| Delete an action (soft delete; also disables its triggers) | `cocli action delete <action> -p <slug> -f` | No |
 | Run action on record | `cocli action run <action> <record> -P key=val -f` | No |
+| **Run one action over many records (default for any multi-record ask)** | `cocli action run <action> -p <slug> -s '<json-logic>' -P key=val -f` (cocli ≥ v1.7.7; dry-run the query with `record list -s` first; mutex with `<record>`) | No |
 | List action runs | `cocli action list-run -o json` | Yes |
 | List runs for a record | `cocli action list-run -r <record> -o json` | Yes |
+| Cancel an action run (async; confirm the exact target before `-f`) | `cocli action cancel-run <action-run> -p <slug> -f` | No |
 | Print a run's logs (running → live pod logs, finished → archived log, same command) | `cocli action logs <action-run> -p <slug>` | No |
 | Follow live logs, wait for the run to start | `cocli action logs <action-run> -p <slug> -f` | No |
-| Logs for a specific job index / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
+| Logs for a specific job index (1-based, `-j 1` = first) / DAG node | `cocli action logs <action-run> -p <slug> -j 1 --node <node>` | No |
 
 `<action-run>` is a full resource name (`projects/<project>/actionRuns/<uuid>`) or a bare UUID.
-Here `-f` means **`--follow`** (stream and reconnect on transient errors), **not** `--force`.
-Without `-f`, a not-yet-started run is reported and the command exits; logs is a streaming text
+For `action logs`, `-f` means **`--follow`** (stream and reconnect on transient errors), **not**
+`--force`. For `action cancel-run`, `-f` means **`--force`** and skips the irreversible-action
+confirmation. Without `-f`, logs reports a not-yet-started run and exits; logs is a streaming text
 command (no `-o json`) — exit `0` = success, `1` = error (check stderr).
 
 ### Registry and Action Images
@@ -272,6 +281,16 @@ Match user intent to the correct command sequence.
 2. Pick record → `cocli record describe <record> -o json`
 3. Download: `cocli record download <record> <dst-dir>` (all) or `cocli record file download <record> <dst-dir> --files "specific.bag"`
 
+**Run processing on many records (the common case — one run, not a loop):**
+
+1. `cocli -v` → confirm ≥ v1.7.7 (`-s` on `action run`); older, tell the user to `cocli update`
+2. Dry-run the selection: `cocli record list -p <slug> -s '<json-logic>' -o json`
+3. Same query, one run: `cocli action run <action> -p <slug> -s '<json-logic>' -P key=val -f`
+4. Poll `cocli action list-run -p <slug> -o json` → `progress.succeeded` counts records
+
+Never loop `action run` per record for a set — see `./actions.md` § Run One Action
+Over Many Records.
+
 **Run processing on a record:**
 
 1. `cocli action list -o json` → find action name
@@ -281,6 +300,16 @@ Match user intent to the correct command sequence.
 5. Inspect logs: `cocli action logs <action-run> -p <slug>` — add `-f` to follow a running
    run live (waits if it hasn't started). Once the run finishes, the archived log is printed
    automatically, so the same command works mid-run or after completion.
+
+**Cancel a running action:**
+
+1. Identify the exact run with `cocli action list-run -o json`.
+2. Show the target to the user and get explicit confirmation.
+3. Request cancellation with `cocli action cancel-run <action-run> -p <slug> -f`.
+4. Poll `action list-run` until the state is `ABORTED`; cancellation is asynchronous.
+
+If the run is already `SUCCEEDED`, `FAILED`, or `ABORTED`, cocli reports that it has finished
+and sends no cancellation request.
 
 **Cross-project transfer:**
 
@@ -293,6 +322,7 @@ Match user intent to the correct command sequence.
 - Metadata: `cocli record update <record> -t "new title" -l key=val`
 - Labels: `--update-labels` (replace), `--delete-labels` (remove), `-l` (append)
 - Moments: `cocli record moment create <record> -n "event" -D 10 -T <epoch-seconds>` creates a task by default; add `-s` / `--skip-create-task` for moment-only annotations.
+- Delete one moment: identify it with `record moment list <record> -o json`, confirm the exact Event resource, then run `cocli record moment delete <moment-resource-name> -f`. This does not separately delete an associated task.
 
 **Environment check:**
 Go to Preflight section above.
@@ -302,7 +332,7 @@ Go to Preflight section above.
 ### Commands with `-o json`
 
 Parse JSON directly. Common examples: `action list`, `action list-run`,
-`project list`, `project create`, `project file list`, `record list`,
+`action get`, `action update`, `project list`, `project create`, `project file list`, `record list`,
 `record create`, `record describe`, `record file list`, `record moment list`,
 `user list`, `user get`, `role list`, `registry create-credential`.
 
@@ -357,6 +387,7 @@ These are hard rules. Do not reason around them.
 | "I'll skip `--skip-params` on action run" | Use `--skip-params` for defaults (no `-P`), or `-P key=val` for explicit params. They are mutually exclusive — never combine. |
 | "I'll use `--page` for pagination" | Use `--page-token` or `--all`. `--page` is deprecated for records. |
 | "Action run returned 0, so the action completed" | action run is ASYNC. Exit 0 means submitted, not completed. Poll `action list-run`. |
+| "`cancel-run` returned 0, so the run is already aborted" | Cancellation is ASYNC. Poll `action list-run` until `ABORTED`; an already-finished run also exits 0 without sending a cancellation request. |
 | "I'll upload without `--no-tty`" | In non-interactive contexts, always pass `--no-tty` to prevent TTY prompts. |
 | "I'll use `login switch` to change profile" | NEVER in automation. `login switch` uses an interactive TUI menu — hangs without TTY. Use `cocli login set -n <name>` to switch persistently, or `--profile <name>` on a single command (no config mutation, safe for concurrent runs). |
 | "I'll guess the registry host" | NEVER. Use `cocli registry create-credential -o json` or `cocli registry login` to discover/authenticate the active org registry. |
@@ -380,3 +411,4 @@ These are hard rules. Do not reason around them.
 | Action run returns 0 but nothing happened | action run is ASYNC | Poll `action list-run -r <record> -o json` for actual status |
 | "interactive input" error | Missing `-f`, `-P`, or `--skip-params` | Add `-f` and either `-P key=val` or `--skip-params` to action run; `--no-tty` to uploads |
 | Record search returns empty | Wrong project context | Verify project with `cocli login current`; try `--all` flag |
+| Exit 1 + "labels not found" | `--labels` value absent in project (typo/casing, or wrong project) | Fix the label spelling; list valid labels. The query does not fall back to unfiltered results |

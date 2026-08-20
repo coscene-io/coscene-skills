@@ -41,6 +41,249 @@ Image checklist before configuring an action:
 
 ---
 
+## Create an Action
+
+`cocli action create` registers a new action in a project. Two authoring modes:
+
+- **Inline flags** — minimal single-container action straight from the command
+  line (`--name`, `--image`, `--command`, ...). Good for quick agent-spawned
+  actions.
+- **Spec file** (`-f`) — a full YAML/JSON `ActionSpec` for multi-job, HTTP,
+  parameterized, or storage/mount/quota-configured actions. Use `--example` to
+  get a skeleton, edit it, then `-f` it back in.
+
+Use flags **or** a file, not both: `-f` is the full, authoritative spec, so the
+spec-content flags (`--name`, `--description`, `--image`, `--command`, `--env`,
+`--param`/`-P`, `--quota`) cannot be combined with `-f` — doing so is a clean
+error. Only operational flags (`-p`/`--project`, `--dry-run`, `-o`/`--output`)
+work alongside `-f`.
+
+### Flag Reference
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug (falls back to the profile default) |
+| `-f` | `--file` | Action spec YAML/JSON file (`-` for stdin) — the full spec; cannot be combined with the inline spec flags below |
+| | `--name` | Action name (inline mode; not with `-f`) |
+| | `--description` | Action description (inline mode; not with `-f`) |
+| | `--image` | Container image (inline mode; not with `-f`) |
+| | `--command` | Container command line — shell-split, quote-aware (inline mode; not with `-f`; see below) |
+| | `--env` | Container env `key=value` (repeatable; inline mode; not with `-f`) |
+| `-P` | `--param` | Action parameter default `key=value` (repeatable; inline mode; not with `-f`) |
+| | `--quota` | Resource preset `small`\|`medium`\|`large`\|`xlarge` (convenience for `quota.cpu`/`quota.memory`; inline mode; not with `-f`) |
+| | `--dry-run` | Validate and print the lowered + server-defaulted spec; makes no API call |
+| | `--example` | Print a skeleton action spec (no create) |
+| `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
+
+There is **no** `--args`, `--job-name`, `--label`, `--cpu-quota`, or
+`--memory-quota`. The CLI built-in single container job defaults to name
+**`main`**. A YAML `-f` spec still accepts full `command`/`args` arrays,
+`labels`, and `quota` directly — those CLI convenience flags were removed.
+
+Quota can be set two ways:
+
+- **`--quota` preset** (convenience, inline mode only) — `small` | `medium` |
+  `large` | `xlarge` maps a t-shirt size to the proto CPU/memory enum pair and
+  sets the spec's quota. Cannot be combined with `-f`; a `-f` spec sets quota
+  via `quota.cpu` / `quota.memory` instead.
+  (`small`→1C/2G, `medium`→2C/4G, `large`→4C/8G, `xlarge`→8C/16G.)
+- **Spec-file `quota.cpu` / `quota.memory`** — the proto-native enum strings
+  (same form `get -o yaml`/`update` use):
+
+```yaml
+quota:
+  cpu: CPU_QUOTA_1C     # CPU_QUOTA_1C | CPU_QUOTA_2C | CPU_QUOTA_4C | CPU_QUOTA_8C
+  memory: MEMORY_QUOTA_2G # MEMORY_QUOTA_1G | _2G | _4G | _8G | _16G | _32G | _64G
+```
+
+### `--command` is a single shell-split flag
+
+`--command` takes one full command line and splits it quote-aware into the
+job's command tokens. Quotes are preserved; all tokens map to the container
+`command` (k8s-style "just give me a command line") and `args` is left empty.
+
+```bash
+--command 'python train.py --epochs 10'   # → ["python","train.py","--epochs","10"]
+--command 'sh -c "echo hi"'               # → ["sh","-c","echo hi"]
+```
+
+### Examples
+
+```bash
+# (a) Minimal inline create — job auto-named "main"
+cocli action create -p my-proj --name train-yolo \
+  --image cr.coscene.io/myorg/train:latest \
+  --command "python train.py --epochs 50" \
+  --env COS_KEY=secret \
+  -P dataset=images \
+  -o json
+
+# (b) Spec file — from disk, and from stdin (agent-generated spec)
+cocli action create -p my-proj -f action.yaml
+echo "$SPEC" | cocli action create -p my-proj -f -
+
+# (c) Example skeleton + dry-run validate workflow (no API calls)
+cocli action create --example > action.yaml      # skeleton, edit REPLACE-ME/image:tag
+cocli action create -p my-proj -f action.yaml --dry-run   # validate the lowered spec
+```
+
+The `--example` skeleton ships a `REPLACE-ME/image:tag` sentinel; if an
+unedited sentinel survives into a real create, cocli warns to stderr (non-fatal
+— server-side validation is authoritative, but it almost always means a junk
+action).
+
+Quota is set either with the `--quota small|medium|large|xlarge` preset (inline
+mode) or the spec-file `quota.cpu` / `quota.memory` proto enum strings — see
+[Resource Options](#resource-options) below. The two authoring modes are
+mutually exclusive: use inline flags **or** a `-f` spec file, not both.
+
+### CRITICAL: RESOURCE_EXHAUSTED means do-not-retry
+
+If `action create` fails with `RESOURCE_EXHAUSTED` / `NO_SUBSCRIPTION`, cocli
+prints *"likely a missing permission grant, not a quota limit — do not retry"*
+and exits non-zero. This is a **permanent config error** (missing subscription
+or permission grant), **not** a transient quota limit — retrying will never
+succeed. Surface the error to the user and stop; fix it in the coScene web UI
+(grants/subscriptions), not by retrying the create.
+
+---
+
+## Get a Single Action
+
+`cocli action get <action> -p <proj> -o table|json|yaml` fetches one action by
+resource name or id.
+
+```bash
+cocli action get my-action -p my-proj -o yaml
+```
+
+The **`-o yaml` / `-o json` output is the full-fidelity `Action`** (name,
+author, timestamps, and the complete `spec`) — and it is the *exact* format
+`action update -f` consumes. This is the get → edit → update loop:
+
+```bash
+cocli action get my-action -p my-proj -o yaml > spec.yaml
+# ...edit spec.yaml...
+cocli action update my-action -p my-proj -f spec.yaml
+```
+
+**Secrets show as `********` placeholders** (the backend desensitizes them in
+the dump). Leave those placeholders unchanged when you edit — the backend
+restores the real values on update (see Update below).
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug |
+| `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) — default `table` |
+
+A resolve-first client-side check gives a clean `failed to find action`
+message when the id doesn't exist.
+
+---
+
+## Update an Action
+
+`cocli action update <action> -p <proj> -f <file|-> [--dry-run] [-o ...]`
+replaces an action's spec **wholesale from a file** (or `-` for stdin).
+
+Update is **spec-only, loaded from a file — NOT from flags.** The file is the
+full-fidelity `Action` format that `action get -o yaml/json` emits, so the
+get → edit → update loop round-trips. There is no inline `--name` /
+`--description` / `--label` on update; edit the dump and feed it back.
+
+```bash
+# Full round-trip
+cocli action get my-action -p my-proj -o yaml > spec.yaml
+# ...edit spec.yaml...
+cocli action update my-action -p my-proj -f spec.yaml
+
+# From stdin
+cat spec.yaml | cocli action update my-action -p my-proj -f -
+
+# Preview the exact spec that would be sent — makes NO wire call
+cocli action update my-action -p my-proj -f spec.yaml --dry-run
+```
+
+Update is a **full spec replace** (the update mask is fixed to `spec`; cocli
+never crafts it). Only the spec is written — name, author, and timestamps are
+untouched, and the positional id selects which action to write.
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug |
+| `-f` | `--file` | Action spec file (`-` for stdin) — the format `get -o yaml/json` emits |
+| | `--dry-run` | Print the spec that would be sent; makes no API call |
+| `-o` | `--output` | Output format (`table` \| `json` \| `yaml`) |
+
+### CRITICAL: update replaces `spec.labels` too
+
+The submitted spec replaces the **entire** spec, **including `spec.labels`**. A
+spec that **omits** `labels` **detaches every label** on the action. The `get`
+dump carries the labels, so an unedited round-trip preserves them — but a
+hand-written spec that drops the `labels` block wipes them. cocli warns to
+stderr when the submitted spec has no labels but the current action does.
+
+### Masked secrets — leave `********` unchanged
+
+Secrets appear as `********` placeholders in a `get` dump. **Do not edit a
+placeholder you aren't changing** — submit it verbatim and the backend restores
+the real stored secret. Only replace a placeholder when you genuinely want to
+set a new value.
+
+### After-update re-get
+
+After a successful update cocli **re-fetches** the action. If that re-get
+returns not-found, cocli prints a loud warning — *"update reported success but
+the action is no longer retrievable; it may have been deleted."* This surfaces a
+backend footgun where an update can silently write to an action that was deleted
+between your `get` and `update`. Treat the warning as a real failure.
+
+Like `create`, a `RESOURCE_EXHAUSTED` / `NO_SUBSCRIPTION` failure means a
+missing permission grant, **not** a quota limit — do not retry (see the
+do-not-retry note under Create).
+
+---
+
+## Delete an Action
+
+`cocli action delete <action> -p <proj> [-f/--force]` deletes an action by
+resource name or id.
+
+```bash
+# Prompts for confirmation (states the trigger side effect):
+cocli action delete my-action -p my-proj
+
+# Skip the confirmation prompt (automation):
+cocli action delete my-action -p my-proj -f
+```
+
+**Delete is a soft delete** — the action stops appearing in `action list`, but
+historical runs are unaffected (they are snapshotted at run time).
+
+### CRITICAL: delete also disables the action's triggers
+
+Deleting an action **also soft-deletes every trigger bound to it**, in the same
+operation. This is silent — the command returns success without a count. The
+confirmation prompt and help text both state it: *"This also disables any
+triggers bound to it."* Do not delete an action whose triggers you still need.
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug |
+| `-f` | `--force` | Skip the confirmation prompt |
+
+A resolve-first client-side check yields a clean `failed to find action`
+message for an unknown id. Note the backend delete is **idempotent** — a repeat
+delete of an already-gone action still reports success.
+
+---
+
 ## Discover Actions
 
 List all actions available in the current project.
@@ -108,6 +351,7 @@ cocli action run <action-name> <record-name> -P key=val -f
 | `-P` | `--param` | Parameter key=value pair (repeatable) |
 | | `--skip-params` | Skip interactive prompts for missing parameters |
 | `-f` | `--force` | Skip confirmation prompt |
+| `-s` | `--search` | JSON Logic record query — one run over every matching record (**requires cocli ≥ v1.7.7**; mutex with the `<record>` argument) |
 
 ### Non-Interactive Pattern (required for automation)
 
@@ -155,6 +399,73 @@ cocli action run actions/decompress records/abc-123 -f --skip-params
 
 ---
 
+## Run One Action Over Many Records
+
+**Default for any multi-record request.** When the user asks to run an action on
+a set of records — "run it on these 10", "backfill the whole project" — create
+**one run covering all of them** with `-s/--search`. Do not loop `action run`
+per record.
+
+```bash
+# 1. ALWAYS dry-run the query first — record list -s takes the same JSON Logic
+Q='{"and":[{"==":[{"var":"isArchived"},"false"]}]}'
+cocli record list -p <slug> -s "$Q" -o json
+
+# 2. Same query, one run
+cocli action run <action> -p <slug> -s "$Q" -P key=val -f
+```
+
+The platform always supported this — `TriggerMatch.records` is a repeated field
+alongside `record_filter`, and `-s` routes to `CreateActionRunWithRecordQuery`.
+Only the CLI entry point was missing before v1.7.7.
+
+Why this is the default: a 1190-record loop produces 1190 runs, one console row
+each, with no aggregate status — undebuggable for the user who has to review it.
+One run reports `progress: {succeeded: N}` and has a single log stream.
+
+### Version gate — check before using
+
+`-s` does not exist before **v1.7.7**. On an older binary the command fails with
+an unknown-flag error, so check first and degrade deliberately:
+
+```bash
+cocli -v   # "cocli version v1.7.7" or newer
+```
+
+If older: tell the user to run `cocli update`. Only if they decline, fall back to
+a per-record loop — and say explicitly that it creates N runs instead of one.
+
+### Query rules
+
+JSON Logic, the same dialect the web console's advanced search emits.
+
+| `var` | Example |
+|---|---|
+| `isArchived` | `{"==":[{"var":"isArchived"},"false"]}` |
+| `customFields.<field-uuid>` | `{"==":[{"var":"customFields.b6a3d78e-…"},"<option-uuid>"]}` |
+
+`customFields` takes **field and enum-option UUIDs, not display names**. Read them
+off any record that already has the field set:
+
+```bash
+cocli record describe <record> -p <slug> -o json \
+  | jq '.custom_field_values[] | {name: .property.name, id: .property.id, enums}'
+```
+
+### CRITICAL: unsupported query vars are silently ignored
+
+`title` is **accepted and then ignored** — no error, no filtering. A query built
+on it selects *every* record in the project, and the action runs against all of
+them. This is why step 1 above is mandatory: `record list -s` shows exactly what
+the run will touch. Filter by title with `record list --keywords` instead.
+
+### The record argument and `-s` are mutually exclusive
+
+Pass one or the other, never both. With `-s`, omit the `<record>` positional
+entirely.
+
+---
+
 ## Monitor Runs
 
 List action execution runs, optionally filtered by record.
@@ -192,7 +503,7 @@ cocli action list-run -r records/abc-123 -o json
 ```
 
 **Key fields:**
-- `state` — `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`
+- `state` — `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `ABORTED`
 - `name` — run identifier
 - `action` — which action was executed
 - `record` — which record it operated on
@@ -221,6 +532,10 @@ while true; do
       echo "Run failed. Check logs in coScene web UI."
       exit 1
       ;;
+    ABORTED)
+      echo "Run was aborted."
+      break
+      ;;
     *)
       sleep 15
       ;;
@@ -232,6 +547,75 @@ done
 - `.[0]` assumes most-recent run is first. If multiple actions target the same record, filter by action name: `jq '.[] | select(.action == "actions/yolo-inference") | .state'`
 - Poll interval of 10-15 seconds is reasonable. Actions typically take minutes to hours.
 - There is no webhook or callback mechanism for run completion via CLI. Polling is the only option.
+
+---
+
+## Cancel a Run
+
+`cocli action cancel-run <action-run> [-p <proj>] [-f/--force]` requests
+cancellation of an action run.
+
+`<action-run>` may be either:
+
+- A full resource name: `projects/<project-uuid>/actionRuns/<run-uuid>`.
+- A bare run UUID, resolved in the current project or the project selected by
+  `-p/--project`.
+
+```bash
+# Prompts because cancellation cannot be undone
+cocli action cancel-run 22222222-2222-2222-2222-222222222222 -p my-proj
+
+# Non-interactive, after the user has explicitly confirmed the exact target
+cocli action cancel-run \
+  projects/11111111-1111-1111-1111-111111111111/actionRuns/22222222-2222-2222-2222-222222222222 \
+  -f
+```
+
+**Flags:**
+
+| Flag | Long | Description |
+|---|---|---|
+| `-p` | `--project` | Project slug used to resolve a bare run UUID |
+| `-f` | `--force` | Skip the irreversible-action confirmation |
+
+### CRITICAL: cancellation is asynchronous
+
+A successful request prints:
+
+```text
+Action run cancellation requested successfully.
+```
+
+This means the server accepted the request, **not** that the run is already
+aborted. Poll `action list-run` until the target state is `ABORTED`. Do not
+automatically retry cancellation or assume submission success is terminal
+success.
+
+### Finished runs are a successful no-op
+
+Before requesting cancellation, cocli checks the run's current state. For
+`SUCCEEDED`, `FAILED`, or `ABORTED`, it prints:
+
+```text
+Action run has already finished with state <STATE>. No cancellation request was sent.
+```
+
+The command exits 0 and does not send a cancellation request. `PENDING`,
+`RUNNING`, and unspecified states proceed to the cancellation request.
+
+Unknown runs, permission failures, state-query failures, and server rejection
+return a non-zero exit. There is no batch cancellation or automatic wait for
+the final state.
+
+### Agent safety rule
+
+Cancellation cannot be undone. Before using `-f` in an agent or automation
+flow:
+
+1. Read back and show the exact ActionRun resource name.
+2. Explain that cancellation is irreversible and asynchronous.
+3. Obtain explicit user confirmation.
+4. Run `cancel-run -f`, then verify the final state with `list-run`.
 
 ---
 
@@ -265,16 +649,26 @@ When an action executes, the platform injects environment variables and mounts r
 
 ### Resource Options
 
-Actions can be configured with these CPU/memory profiles:
+Quota can be set two ways on `action create`: the `--quota small|medium|large|xlarge`
+convenience preset (inline mode), or the spec-file `quota.cpu` / `quota.memory`
+proto-native enum strings (the same form `get -o yaml` / `update` use). The two
+are mutually exclusive — `--quota` cannot be combined with `-f` (the file is
+authoritative). Empty cpu and memory leaves quota unset (server-defaulted).
+The presets map to: `small`→`CPU_QUOTA_1C`/`MEMORY_QUOTA_2G`,
+`medium`→`CPU_QUOTA_2C`/`MEMORY_QUOTA_4G`, `large`→`CPU_QUOTA_4C`/`MEMORY_QUOTA_8G`,
+`xlarge`→`CPU_QUOTA_8C`/`MEMORY_QUOTA_16G`.
 
-| Profile | CPU | Memory |
-|---|---|---|
-| Small | 1 core | 2 GB |
-| Medium | 2 cores | 4 GB |
-| Large | 4 cores | 8 GB |
-| XLarge | 8 cores | 16 GB |
+| `quota.cpu` | CPU | | `quota.memory` | Memory |
+|---|---|---|---|---|
+| `CPU_QUOTA_1C` | 1 core | | `MEMORY_QUOTA_1G` | 1 GB |
+| `CPU_QUOTA_2C` | 2 cores | | `MEMORY_QUOTA_2G` | 2 GB |
+| `CPU_QUOTA_4C` | 4 cores | | `MEMORY_QUOTA_4G` | 4 GB |
+| `CPU_QUOTA_8C` | 8 cores | | `MEMORY_QUOTA_8G` | 8 GB |
+| | | | `MEMORY_QUOTA_16G` | 16 GB |
+| | | | `MEMORY_QUOTA_32G` | 32 GB |
+| | | | `MEMORY_QUOTA_64G` | 64 GB |
 
-Contact support for custom resource profiles above 8C/16G.
+Contact support for custom resource quotas above 8C/64G.
 
 ### COS_TOKEN Permission Model
 

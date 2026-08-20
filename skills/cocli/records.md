@@ -16,6 +16,18 @@ When the full name is used, the `-p` (project) flag is optional — the project 
 already encoded in the path. The `-p` flag is only required when using a bare
 record UUID or a short name without the project prefix.
 
+Moment names returned by `record moment list -o json` use the Event resource
+name format:
+
+```
+projects/{project-uuid}/events/{moment-uuid}
+```
+
+Pass this full name to `record moment delete` whenever possible. A bare moment
+UUID is also accepted and is resolved in the current project or the project
+selected by `-p`. If a full resource name and `-p` are both supplied, the
+project encoded in the resource name takes precedence.
+
 ## Record Lifecycle
 
 ### record create — JSON: Yes
@@ -73,6 +85,23 @@ cocli record update records/abc-123 --delete-labels "env"      # delete
 ```
 
 **Mutually exclusive:** pick exactly one of `-l/--labels`, `--update-labels`, or `--delete-labels` per invocation.
+
+#### CRITICAL: `--custom` replaces the whole custom-field list
+
+Unlike `-l`, `--custom` is **not** a merge. It overwrites every custom field on
+the record — anything you omit is erased. On a record carrying human QC labels
+(质检结果, 质检员, 质检时间, …) a partial `--custom` silently destroys them.
+
+Always read-modify-write:
+
+```bash
+cocli record describe <record> -p <slug> -o json   # read existing custom fields
+# merge your change into the FULL list, then send all of them back
+cocli record update <record> -p <slug> --custom '<full list, not just your field>'
+```
+
+If any existing field can't be round-tripped, abort rather than write a partial
+list. Writes to live records are visible to the humans reviewing them.
 
 ### record list — JSON: Yes
 
@@ -224,9 +253,48 @@ command.
 **Flags:** `-p` (project), `-v` (verbose), `-o json`
 
 ```bash
+cocli record moment list records/abc-123
+# ID                                     DISPLAY NAME        TRIGGER TIME               DURATION
+# 11111111-1111-1111-1111-111111111111   Collision detected  2026-04-28T14:30:00+08:00  10s
+
 cocli record moment list records/abc-123 -o json
-# → [{"name": "moments/m-001", "displayName": "Collision detected", ...}]
+# → {"events":[{"name":"projects/<project-uuid>/events/11111111-1111-1111-1111-111111111111","displayName":"Collision detected",...}],"totalSize":"1"}
 ```
+
+The default table prints the bare moment UUID under `ID`. JSON keeps the full
+Event resource name in `events[].name` and the same display label in
+`events[].displayName`.
+
+### record moment delete — JSON: No
+
+Delete exactly one moment. Deletion is irreversible.
+
+**Flags:** `-p` (project used to resolve a bare UUID), `-f` / `--force` (skip confirmation)
+
+```bash
+# Full resource name; its embedded project takes precedence over -p
+cocli record moment delete \
+  projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/events/11111111-1111-1111-1111-111111111111
+
+# Bare UUID resolved in the selected project
+cocli record moment delete 11111111-1111-1111-1111-111111111111 -p my-project
+```
+
+Before prompting, cocli reads the moment and prints its display name and full
+resource name. `-f` skips only the prompt; it still performs this read-back and
+fails if the target does not exist. A successful delete prints the full deleted
+resource name.
+
+Deleting a moment calls the server's Event deletion API only. It does not
+separately delete an associated task created with the moment.
+
+For agent or automation use:
+
+1. Find the target with `cocli record moment list <record> -o json`.
+2. Show the exact `events[].displayName` and `events[].name` to the user.
+3. Explain that deletion cannot be undone and obtain explicit confirmation.
+4. Run `cocli record moment delete <events[].name> -f`.
+5. Re-run `record moment list` and verify that the resource is absent.
 
 ### record moment download — JSON: No
 
@@ -294,6 +362,8 @@ cocli record list --labels "env=prod" --keywords "lidar" -o json
 # Include archived
 cocli record list --include-archive -o json
 ```
+
+**Unresolved label = hard error.** `--labels` resolves each label name to an ID in the project before querying. If any label does not exist in the project, the command fails with `Exit 1 + "labels not found: <name>"` and runs no query — it does **not** fall back to returning all records. Partial matches fail too: `--labels "env=prod" --labels "typo"` aborts even though `env=prod` exists. When a filter errors, fix the label spelling/casing rather than assuming zero matches. (Fixed in coCLI [#188](https://github.com/coscene-io/coCLI/pull/188); older builds silently returned the full unfiltered list.)
 
 ---
 
