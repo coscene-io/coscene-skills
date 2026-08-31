@@ -190,6 +190,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 | List project files | `cocli project file list <project-slug> -o json` | Yes |
 | Download project files | `cocli project file download <project-slug> ./output --files "config.yaml"` | No |
 | Delete project files | `cocli project file delete <project-slug> --files "old.log" -f` | No |
+| Show project S3 connection info | `cocli project s3-info <project-slug> -o json` | Yes |
 
 ### Run Actions
 
@@ -317,6 +318,13 @@ and sends no cancellation request.
 - Move: `cocli record move <record> -P <dst-project> -f`
 - File-level: `cocli record file copy <src> <dst> -P <dst-project> --files "a.bag" -f`
 
+**Use project S3 interface:**
+
+1. Verify the active profile endpoint matches the user's platform URL.
+2. Prefer `cocli project s3-info <project-slug> -o json` and read `endpoint`, `region`, `bucket`.
+3. If the command is missing on an older cocli, do not infer these values. Get them from the project overview S3 tab (`/<org>/<project>/overview?tab=s3`) or ask the user for the three fields.
+4. For a read-only smoke test, read `./workflows.md` § S3 Read Smoke.
+
 **Modify existing record:**
 
 - Metadata: `cocli record update <record> -t "new title" -l key=val`
@@ -334,7 +342,8 @@ Go to Preflight section above.
 Parse JSON directly. Common examples: `action list`, `action list-run`,
 `action get`, `action update`, `project list`, `project create`, `project file list`, `record list`,
 `record create`, `record describe`, `record file list`, `record moment list`,
-`user list`, `user get`, `role list`, `registry create-credential`.
+`user list`, `user get`, `role list`, `registry create-credential`,
+`project s3-info`.
 
 Common JSON shapes:
 
@@ -383,6 +392,7 @@ These are hard rules. Do not reason around them.
 | "I can skip `-f` on action run" | NEVER. Without `-f`, cocli prompts interactively and hangs. |
 | "`-f` always means `--force`" | NOT for `action logs`, where `-f` is `--follow` (stream live). It is `--force` on `action run`, `delete`, `copy`, `move`. |
 | "I'll hardcode the endpoint URL for data commands" | NEVER. The active profile handles endpoint selection. Only set an endpoint when creating/updating a profile, then verify with `cocli login current`. |
+| "I'll use the cocli profile endpoint as the S3 endpoint" | NEVER. The profile endpoint is the OpenAPI host. S3 uses a project storage endpoint; get it with `cocli project s3-info` or the project overview S3 tab. |
 | "I'll use `record view` to see the record" | `record view` only prints a URL (or opens browser with `-w`). Use `record describe -o json`. |
 | "I'll skip `--skip-params` on action run" | Use `--skip-params` for defaults (no `-P`), or `-P key=val` for explicit params. They are mutually exclusive — never combine. |
 | "I'll use `--page` for pagination" | Use `--page-token` or `--all`. `--page` is deprecated for records. |

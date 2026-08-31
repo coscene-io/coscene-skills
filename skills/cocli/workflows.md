@@ -345,3 +345,50 @@ docker pull "$REGISTRY/my-org/my-image:latest"
 - Step 1: "token" error → profile token expired. Re-authenticate with `cocli login add`.
 - Step 2: Credential output is sensitive. Do not log or persist in plaintext.
 - Step 3: Docker must be installed and running on the host.
+
+---
+
+## 11. S3 Read Smoke
+
+Verify that a project's S3 interface is reachable with read-only operations.
+Use this when the user provides personal S3 credentials and a record URL.
+
+```bash
+# Step 1: Confirm cocli is pointed at the same instance as the record URL.
+cocli login current
+
+# Step 2: Get project S3 connection info.
+PROJECT="demo"
+if cocli project s3-info --help >/dev/null 2>&1; then
+  S3_INFO=$(cocli project s3-info "$PROJECT" -o json)
+else
+  echo "cocli project s3-info is unavailable; read endpoint, region, and bucket from the project overview S3 tab."
+  exit 1
+fi
+
+ENDPOINT=$(echo "$S3_INFO" | jq -r '.endpoint')
+REGION=$(echo "$S3_INFO" | jq -r '.region')
+BUCKET=$(echo "$S3_INFO" | jq -r '.bucket')
+printf "endpoint=%s\nregion=%s\nbucket=%s\n" "$ENDPOINT" "$REGION" "$BUCKET"
+
+# Step 3: Configure AWS CLI path-style addressing for coScene S3 endpoints.
+export AWS_ACCESS_KEY_ID='<personal-s3-access-key-id>'
+export AWS_SECRET_ACCESS_KEY='<personal-s3-secret-access-key>'
+export AWS_CONFIG_FILE="$(mktemp)"
+aws configure set default.s3.addressing_style path
+
+# Step 4: List a record prefix. Object keys use records/<record-id>/files/<path>.
+RECORD_ID="abc-123"
+aws s3api list-objects-v2 \
+  --endpoint-url "$ENDPOINT" \
+  --region "$REGION" \
+  --bucket "$BUCKET" \
+  --prefix "records/$RECORD_ID/files/" \
+  --max-items 5
+```
+
+**What can go wrong:**
+- `s3-info` missing → update cocli or read the project overview S3 tab (`/<org>/<project>/overview?tab=s3`). Do not guess endpoint, region, or bucket.
+- `AccessDenied` with bucket like `default` → wrong bucket. Use the bucket shown by `project s3-info` or the overview S3 tab, usually `<org-slug>.<project-slug>`.
+- TLS/host errors with dotted bucket names → path-style addressing is not set. Use the temporary `AWS_CONFIG_FILE` and `aws configure set default.s3.addressing_style path`.
+- Do not print or commit `AWS_SECRET_ACCESS_KEY`. Use read-only list/head/get commands first; ask before any delete or overwrite.
