@@ -13,9 +13,9 @@ Event (file upload, collection complete, record change, cron, task change)
     ↓
 Trigger (matches event against configured conditions)
     ↓
-Action (executes container code or sends HTTP webhook)
+Action (runs container, HTTP, or Ray Python steps)
     ↓
-Output (record.patch.json creates/updates records, chaining further triggers)
+Output (depends on runtime and output settings)
 ```
 
 ## Action Anatomy
@@ -27,7 +27,7 @@ An action (动作) is the fundamental building block. Each action has:
 - **Labels** — categorization tags for filtering
 - **Parameters** — key-value pairs, referenced as `{{parameter.key}}` in
   commands and bodies
-- **Steps** — one or more execution steps (container or webhook)
+- **Steps** — one or more execution steps (container or webhook for standard actions, Python for Ray actions)
 
 ### Parameter Interpolation
 
@@ -38,11 +38,15 @@ invocation time. Parameters are project-scoped and reusable.
 ### Authoring Constraint
 
 Actions are authored through public product surfaces only. Prefer `cocli` for
-execution and inspection, use public OpenAPI only for supported public
+action creation, updates, execution, and inspection, use public OpenAPI only for supported public
 operations, and use the platform web UI when neither exposes the authoring or
 configuration capability. Do not use internal or undocumented APIs in public
 skills. System-provided built-in actions (e.g., "Decompress File") are available
 without authoring.
+
+## Ray Python steps
+
+Each ActionRun gets a Ray cluster. Each record follows the step dependencies in the action spec. A Task runs a Python function; an Actor can load a model once and reuse it across records assigned to that instance. Read input files from `current_context().record.files_dir` and write shared JobRun outputs to `current_context().outputs_dir`. For the YAML schema, worker image example, and commands, use the [coCLI Ray action workflow](../cocli/actions.md#ray-actions).
 
 ## Container Code Execution (镜像代码执行)
 

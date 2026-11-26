@@ -94,11 +94,7 @@ details on `--skip-create-task` when task creation is not desired.
 ### Action (动作)
 
 A building block of the automation system representing a specific processing task.
-Actions execute through two mechanisms: container-based code execution (Docker images
-with record files mounted) or HTTP webhook requests. Each action has one or more
-steps, supports `{{parameter.key}}` interpolation for configuration, and runs with
-configurable resources (1-8 CPU cores, 2-16GB memory). Use the platform UI for
-action authoring when the operation is not exposed by cocli or public OpenAPI.
+Standard actions execute container or HTTP steps. Ray actions run Python functions (Tasks) or classes (Actors) from a worker image, with per-step resources and record concurrency. Use `cocli action create -f` and `action update -f` to author action specs. See the [Ray action workflow](../cocli/actions.md#ray-actions).
 System-provided built-in actions (e.g., "Decompress File") are also available.
 
 ### Device / coScout (设备 / 端助理)
@@ -241,7 +237,7 @@ lag behind or simplify.
 | 项目 | Project | RBAC boundary, action/trigger scope |
 | 记录 | Record | Data container (NOT a single file) |
 | 一刻 | Moment | Timestamped annotation on sensor timeline |
-| 动作 | Action | Automation building block, UI-authored only |
+| 动作 | Action | Project automation definition, authored with cocli or the platform UI |
 | 设备 / 端助理 | Device / coScout | Edge agent for capture + upload |
 | 标签 | Label | Record categorization, trigger filter |
 | 触发器 | Trigger | Event-based action activation |
@@ -270,7 +266,7 @@ lag behind or simplify.
 | "Labels trigger actions when changed" | NOT directly. Label changes on existing records do not fire file-upload triggers. Only field mutations and new file uploads do. |
 | "Rule engine and triggers are the same" | NO. Rule engine = device/edge (CEL, event codes, dedup). Triggers = project/cloud (file upload, cron, status). |
 | "I can use hidden APIs when cocli cannot do it" | NO. Public skills must stay on public OpenAPI, cocli, and web UI operations only. |
-| "I can create actions with cocli" | NO. cocli handles records, files, devices, projects. If public OpenAPI does not expose action authoring, use the web UI. |
+| "How do I configure a Ray step?" | Set `jobs[].python.target` in the action spec. Use the cocli skill for validation and submission. |
 
 ## Common Misconceptions
 
@@ -291,6 +287,4 @@ lag behind or simplify.
   (CEL expressions, event codes, dedup windows); triggers are cloud/project-side
   (file upload, cron, status change).
 
-- **cocli cannot author automation by itself** — CLI handles data operations
-  (records, files, devices). If public OpenAPI also does not expose a needed
-  automation authoring capability, use the platform UI.
+- **Action authoring** — use cocli to create and update action specs. Use the platform UI for trigger configuration when the CLI and public OpenAPI do not expose the operation.
