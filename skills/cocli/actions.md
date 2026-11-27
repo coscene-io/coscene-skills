@@ -1,11 +1,6 @@
 # Actions Reference
 
-Actions are the automation building blocks of coScene. They execute data processing operations (cleaning, preprocessing, training, testing) through container-based code execution or HTTP webhook requests.
-
-**Key constraint:** cocli is used to discover, run, and monitor actions. For
-authoring or configuration, use public OpenAPI only if that capability is
-documented and available; otherwise use the coScene web interface. Do not use
-internal or undocumented APIs in public skills.
+Use cocli to create, update, run, and monitor project actions. Container and HTTP steps run with the standard action runtime. Ray actions run Python steps from a worker image and can process multiple records concurrently.
 
 ---
 
@@ -48,7 +43,7 @@ Image checklist before configuring an action:
 - **Inline flags** — minimal single-container action straight from the command
   line (`--name`, `--image`, `--command`, ...). Good for quick agent-spawned
   actions.
-- **Spec file** (`-f`) — a full YAML/JSON `ActionSpec` for multi-job, HTTP,
+- **Spec file** (`-f`) — a full YAML/JSON `ActionSpec` for Ray, multi-job, HTTP,
   parameterized, or storage/mount/quota-configured actions. Use `--example` to
   get a skeleton, edit it, then `-f` it back in.
 
@@ -80,7 +75,7 @@ There is **no** `--args`, `--job-name`, `--label`, `--cpu-quota`, or
 **`main`**. A YAML `-f` spec still accepts full `command`/`args` arrays,
 `labels`, and `quota` directly — those CLI convenience flags were removed.
 
-Quota can be set two ways:
+Container action quota can be set two ways:
 
 - **`--quota` preset** (convenience, inline mode only) — `small` | `medium` |
   `large` | `xlarge` maps a t-shirt size to the proto CPU/memory enum pair and
@@ -132,7 +127,7 @@ unedited sentinel survives into a real create, cocli warns to stderr (non-fatal
 — server-side validation is authoritative, but it almost always means a junk
 action).
 
-Quota is set either with the `--quota small|medium|large|xlarge` preset (inline
+Container action quota is set either with the `--quota small|medium|large|xlarge` preset (inline
 mode) or the spec-file `quota.cpu` / `quota.memory` proto enum strings — see
 [Resource Options](#resource-options) below. The two authoring modes are
 mutually exclusive: use inline flags **or** a `-f` spec file, not both.
@@ -145,6 +140,56 @@ and exits non-zero. This is a **permanent config error** (missing subscription
 or permission grant), **not** a transient quota limit — retrying will never
 succeed. Surface the error to the user and stop; fix it in the coScene web UI
 (grants/subscriptions), not by retrying the create.
+
+---
+
+## Ray actions
+
+Check `cocli action create --help` for `ray.concurrency` if the installed CLI version is uncertain. Use a build containing [coCLI #197](https://github.com/coscene-io/coCLI/pull/197) for Ray file support and local DAG validation.
+
+Save this as `ray-action.yaml`. Replace the image with the published worker image that provides both Python targets. Functions run as Tasks. For an Actor, specify the class as the target and implement its `run` method. See the [worker image and Python examples](https://docs.coscene.cn/docs/automation/create-action/ray-action).
+
+```yaml
+name: camera-detection
+ray:
+  image: registry.example.com/my-org/mcap-object-detection:v1
+  concurrency: 2
+jobs:
+  - name: sample
+    python:
+      target: camera.sample_frames
+      resources:
+        cpu: CPU_QUOTA_1C
+        memory: MEMORY_QUOTA_2G
+  - name: detect
+    depends: [sample]
+    python:
+      target: camera.ObjectDetector
+      bindings:
+        manifest_path: sample
+```
+
+- `ray.concurrency` is the maximum number of records in the pipeline at once. Use a positive integer. Set per-step CPU and memory under `jobs[].python.resources`.
+- `depends` declares execution order. Each named dependency must exist, job names must be unique, and the graph must be acyclic. Jobs can appear in any list order.
+- In `python.bindings`, the key is the Python parameter and the value is the name of an upstream step. Here the Actor receives the path returned by `sample` as `run(manifest_path=...)`. An explicit binding may also select an indirect ancestor. With empty or omitted bindings, matching parameter names receive direct dependencies’ return values.
+- Both file commands reject `resources` or `bindings` placed directly on a Ray job and report the correct path. A local dry-run checks the spec; a trial run on a record checks that the worker can load the targets and execute them.
+
+```bash
+cocli action create -p "$PROJECT" -f ray-action.yaml --dry-run -o json
+cocli action create -p "$PROJECT" -f ray-action.yaml -o json
+
+# Set ACTION to the returned action ID or resource name. Edit the exported spec to update it.
+cocli action get "$ACTION" -p "$PROJECT" -o yaml > current.yaml
+cocli action update "$ACTION" -p "$PROJECT" -f current.yaml --dry-run -o json
+cocli action update "$ACTION" -p "$PROJECT" -f current.yaml
+
+# Set RECORD to a test record ID. This submits one asynchronous run using default parameters.
+cocli action run "$ACTION" "$RECORD" -p "$PROJECT" --skip-params -f
+cocli action list-run -r "$RECORD" -p "$PROJECT" -o json
+# Set RUN to the submitted ActionRun ID. Node names match jobs[].name.
+cocli action logs "$RUN" -p "$PROJECT" --node sample
+cocli action logs "$RUN" -p "$PROJECT" --node detect
+```
 
 ---
 
@@ -619,7 +664,7 @@ flow:
 
 ---
 
-## Action Runtime Environment
+## Container Action Runtime Environment
 
 When an action executes, the platform injects environment variables and mounts record data automatically.
 

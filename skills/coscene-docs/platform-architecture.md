@@ -123,7 +123,7 @@ Device files/streams
        ↓
   Triggers may fire (file upload, collection status change)
        ↓
-  Actions execute (container or webhook)
+  Actions execute (container, webhook, or Ray Python steps)
 ```
 
 ### Configuration Parameters

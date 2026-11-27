@@ -21,7 +21,7 @@ Read on-demand — not on every invocation.
 | `./setup.md` | Preflight reports non-OK status, or user needs install/profile/prefs setup |
 | `./records.md` | Working with record lifecycle, file operations, or moments |
 | `./workflows.md` | Building multi-step workflows or following templates |
-| `./actions.md` | Creating, running, or monitoring actions, or understanding automation runtime |
+| `./actions.md` | Creating, running, or monitoring actions, including Ray Python targets, input bindings, and record concurrency |
 
 ## Sister Skill
 
@@ -197,6 +197,7 @@ Task-to-command routing. Not flag-complete — run `cocli <cmd> --help` for full
 |---|---|---|
 | Create action (inline single container; job auto-named `main`) | `cocli action create -p <slug> --name <n> --image <img> --command "python run.py" --quota small -o json` (inline `--quota small\|medium\|large\|xlarge` preset) | Yes |
 | Create action from spec file / stdin (file is the full spec; inline spec flags like `--name`/`--quota` cannot be combined with `-f`) | `cocli action create -p <slug> -f action.yaml` (`-f -` for stdin) | Yes |
+| Validate a Ray action spec (worker image, record concurrency, Python steps) | `cocli action create -p <slug> -f ray-action.yaml --dry-run -o json` · [Ray example](./actions.md#ray-actions) | Yes |
 | List available actions | `cocli action list -o json` | Yes |
 | Get one action (`-o yaml/json` is `update -f`'s input format) | `cocli action get <action> -p <slug> -o yaml` | Yes |
 | Update an action's spec from a file (full spec replace; get → edit → update loop) | `cocli action update <action> -p <slug> -f spec.yaml` (`-f -` for stdin; `--dry-run` to preview) | Yes |
